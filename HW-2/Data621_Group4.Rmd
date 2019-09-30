@@ -1,0 +1,327 @@
+---
+title: "Data-621 Homework-2 Group-4"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+#### Name: Sachid Deshmukh, Michael Yampol, Vishal Arora, Ann Ferrara
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+```
+
+#### 1. Download the classification output data set (attached in Blackboard to the assignment).
+
+* **Load Data**
+
+```{r}
+input.df = read.csv("D:/MSDS/MSDSQ4/Data621/HW-2/classification-output-data.csv", stringsAsFactors = FALSE)
+```
+
+* **View Data**
+
+```{r}
+head(input.df)
+```
+#### 2. The data set has three key columns we will use:
+
+* **class:** the actual class for the observation
+* **scored.class:** the predicted class for the observation (based on a threshold of 0.5)
+* **scored.probability:** the predicted probability of success for the observation
+
+#### Use the table() function to get the raw confusion matrix for this scored dataset. Make sure you understand the output. In particular, do the rows represent the actual or predicted class? The columns?
+
+```{r}
+conf.mat = table(input.df$class, input.df$scored.class)
+conf.mat
+```
+
+* **Above table shows the confusion matrix. In the above table rows represents the Actual class and columns represent the predicted class**
+
+* **Create a dataframe for above metrics**
+
+```{r}
+create.metrics = function(actclass, predclass)
+{
+  TN = sum(actclass == 0 & predclass == 0)
+  FP = sum(actclass == 0 & predclass == 1)
+  FN = sum(actclass == 1 & predclass == 0)
+  TP = sum(actclass == 1 & predclass == 1)
+  metrics.df = data.frame(TN=TN, FN = FN, TP = TP, FP = FP)
+  return(metrics.df)
+  
+}
+
+metrics.df = create.metrics(input.df[,'class'], input.df[,'scored.class'])
+```
+
+#### 3. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified,and returns the accuracy of the predictions.
+
+**Accuracy = (TP + TN)/ (TP + FP + TN + FN)**
+
+
+
+* **Function to calculate Accuracy**
+
+```{r}
+calc.accuracy = function(df)
+{
+  Accuracy = (df$TP + df$TN)/ (df$TP + df$FP + df$TN + df$FN)
+  return(Accuracy)
+}
+
+print(paste('Accuracy = ', calc.accuracy(metrics.df)))
+```
+
+#### 4. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified,and returns the classification error rate of the predictions.
+
+**Classification Error Rate = (FP + FN)/(TP + FP + TN + FN)**
+
+* **Function to calculate Classification Error**
+
+```{r}
+calc.error = function(df)
+{
+  Error = (df$FP + df$FN)/ (df$TP + df$FP + df$TN + df$FN)
+  return(Error)
+}
+
+print(paste('Classification Error = ', calc.error(metrics.df)))
+```
+
+
+#### Verify that you get an accuracy and an error rate that sums to one.
+
+```{r}
+print(calc.accuracy(metrics.df) + calc.error(metrics.df))
+```
+* **Above calculation proves that Accuracy and Error rate sums to one**
+
+#### 5. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the precision of the predictions.
+
+**Precision = TP/(TP + FP)**
+
+```{r}
+calc.precision = function(df)
+{
+  Precision = (df$TP)/ (df$TP + df$FP)
+  return(Precision)
+}
+
+print(paste('Precision = ', calc.precision(metrics.df)))
+```
+
+#### 6. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the sensitivity of the predictions. Sensitivity is also known as recall.
+
+**Sensitivity = TP/(TP + FN)**
+
+```{r}
+calc.sensitivity = function(df)
+{
+  Sensitivity = (df$TP)/ (df$TP + df$FN)
+  return(Sensitivity)
+}
+
+print(paste('Sensitivity = ', calc.sensitivity(metrics.df)))
+```
+
+
+#### 7. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the specificity of the predictions.
+
+**Specificity = TN/(TN + FP)**
+
+```{r}
+calc.specificity = function(df)
+{
+  Specificity = (df$TN)/ (df$TN + df$FP)
+  return(Specificity)
+}
+
+print(paste('Specificity = ', calc.specificity(metrics.df)))
+```
+
+#### 8. Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the F1 score of the predictions.
+
+**F1 Score = (2 * Precision * Sensitivity)/ (Precision + Sensitivity)**
+
+```{r}
+calc.f1score = function(df)
+{
+  precision = calc.precision(df)
+  sensitivity = calc.sensitivity(df)
+  f1.score = (2 * precision * sensitivity)/(precision + sensitivity)
+  return(f1.score)
+}
+
+print(paste('F1 Score = ', calc.f1score(metrics.df)))
+```
+
+#### 9. Before we move on, let’s consider a question that was asked: What are the bounds on the F1 score? Showthat the F1 score will always be between 0 and 1.
+
+* **F1 score is calculated based on Precision and Sensitivity. Precision is nothing but how many are true positives out of identified positives and sensitivity is nothing but how many true positives are identified out of total available positives. Based on these definitions and above formulae we can conclude that both precision and sensitivity values can range from 0 to 1**
+
+* **Below is the simple simulation of F1 score range when precision and sensitivity values varies from 0 to 1**
+
+
+```{r}
+precision = c(0.001, 0.1, 0.5, 0.9, 1)
+recall = c(0.001, 0.1, 0.5, 0.9, 1)
+
+f1.score = (2*precision * recall)/(precision + recall)
+print(f1.score)
+```
+
+* **Above simulation shows that when precision and sensitivity values varies from 0 to 1 F1 Score takes a range of values from 0 to 1. From the above simulation we can conclude that F1 score value can be within 0 to 1 range, with 0 indicating poor model fit and 1 indicating best model fit**
+
+#### 10. Write a function that generates an ROC curve from a data set with a true classification column (class in ourexample) and a probability column (scored.probability in our example). Your function should return a list that includes the plot of the ROC curve and a vector that contains the calculated area under the curve(AUC). Note that I recommend using a sequence of thresholds ranging from 0 to 1 at 0.01 intervals.
+
+```{r}
+simple_auc <- function(TPR, FPR){
+  # inputs already sorted, best scores first 
+  dFPR <- c(diff(FPR), 0)
+  dTPR <- c(diff(TPR), 0)
+  auc = sum(TPR * dFPR) + sum(dTPR * dFPR)/2
+  return(abs(auc))
+}
+calc.roc = function()
+{
+  library(ggplot2)
+  threshold = seq(0,1,0.01)
+  class = input.df$class
+  spec = c()
+  sens = c()
+  for(t in threshold)
+  {
+    scored.class = ifelse(input.df$scored.probability > t, 1, 0)
+    df = data.frame(class = class, scored.class = scored.class)
+    
+    metrics.df = create.metrics(df[,'class'], df[,'scored.class'])
+    spec = c(spec, calc.specificity(metrics.df))
+    sens = c(sens, calc.sensitivity(metrics.df))
+  }
+  
+  plt = ggplot2::qplot(1-spec, sens, xlim = c(0, 1), ylim = c(0, 1),
+    xlab = "false positive rate", ylab = "true positive rate", geom='line')
+   auc = simple_auc(sens, 1-spec)
+   return (list(plt, auc))
+}
+
+lst = calc.roc()
+```
+
+#### 11. Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.
+
+* **Accuracy**
+
+```{r}
+print(paste('Accuracy = ', calc.accuracy(metrics.df)))
+```
+
+* **Classification Error**
+
+```{r}
+print(paste('Classification Error = ', calc.error(metrics.df)))
+```
+
+* **Precision**
+
+```{r}
+print(paste('Precision = ', calc.precision(metrics.df)))
+```
+
+* **Sensitivity**
+
+```{r}
+
+print(paste('Sensitivity = ', calc.sensitivity(metrics.df)))
+```
+
+* **Specificity**
+
+```{r}
+print(paste('Specificity = ', calc.specificity(metrics.df)))
+```
+
+* **F1 Score**
+
+```{r}
+print(paste('F1 Score = ', calc.f1score(metrics.df)))
+```
+
+* **ROC Curve**
+
+```{r}
+calc.roc()[1]
+```
+
+* **AUC**
+
+```{r}
+print(paste('AUC = ', calc.roc()[2]))
+```
+#### 12. Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions?
+
+```{r}
+library(caret)
+confusionMatrix(as.factor(input.df$scored.class), as.factor(input.df$class), positive='1' )
+sensitivity(as.factor(input.df$scored.class), as.factor(input.df$class), positive = 1)
+specificity(as.factor(input.df$scored.class), as.factor(input.df$class), negative=0)
+```
+
+**We can see that above results from caret package calls matches exactly with our own function call. No difference is identified between results obtained from caret package and our own function call for important metrics like confusionmatrix, sensitivity and specificity**
+
+#### 13. Investigate the pROC package. Use it to generate an ROC curve for the data set. How do the results compare with your own functions?
+
+```{r}
+library(pROC)
+roccurve = roc(input.df$class, input.df$scored.class, ci=TRUE, of="thresholds")
+plot.roc(roccurve)
+auc(roccurve)
+```
+
+**ROC obtained from pROC package looks little diffrent than ROC obtained from our own function. Area under curve is also slightly different. AUC returned from our own function is 0.84 and AUC returned from pROC package is 0.71 **
+
+**After further exploration, we found that this difference is due to different threshold increment values. When we modify our function to use higher interval threshold values (min-0, max-1, increment-0.5) the ROC curve returned from our function matches exactly with pROC package. Even the AUC value is exactly same between our own function and pROC package after threchold increment is tweaked**
+
+**ROC plot obtained from our own function after tweaking threshold increments**
+
+```{r}
+calc.roc = function()
+{
+  library(ggplot2)
+  threshold = seq(0,1,0.5)
+  class = input.df$class
+  spec = c()
+  sens = c()
+  for(t in threshold)
+  {
+    scored.class = ifelse(input.df$scored.probability > t, 1, 0)
+    df = data.frame(class = class, scored.class = scored.class)
+    
+    metrics.df = create.metrics(df[,'class'], df[,'scored.class'])
+    spec = c(spec, calc.specificity(metrics.df))
+    sens = c(sens, calc.sensitivity(metrics.df))
+  }
+  
+  plt = ggplot2::qplot(1-spec, sens, xlim = c(0, 1), ylim = c(0, 1),
+    xlab = "false positive rate", ylab = "true positive rate", geom='line')
+   auc = simple_auc(sens, 1-spec)
+   return (list(plt, auc))
+}
+
+lst = calc.roc()
+```
+```{r}
+lst[1]
+```
+
+**AUC value obtained from our own function after tweaking threshold increments**
+
+```{r}
+lst[2]
+```
