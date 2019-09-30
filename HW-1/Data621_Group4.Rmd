@@ -1,0 +1,117 @@
+---
+title: "Data-621 Homework-1"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(corrplot)
+library(psych)
+library(MASS)
+library(forecast)
+```
+
+###1. Load Data
+```{r}
+train.df = read.table("D:/MSDS/MSDSQ4/Data621/HW-1/moneyball-training-data.csv", sep=',', header = TRUE, stringsAsFactors = FALSE)
+
+```
+###2. Data Exploration
+```{r}
+head(train.df)
+nrow(train.df)
+ncol(train.df)
+
+train.df = train.df%>%dplyr::select(-INDEX)
+
+
+cols.miss = sapply(train.df, function(x) any(is.na(x)))
+cols.miss = names(cols.miss[cols.miss>0])
+cols.nomiss = names(train.df)[!names(train.df)%in%(cols.miss)]
+train.df = train.df%>%dplyr::select(cols.nomiss)
+summary(train.df$TARGET_WINS)
+hist(train.df$TARGET_WINS)
+boxplot(train.df$TARGET_WINS)
+res = cor(train.df)
+corrplot(res, type = "upper", order = "hclust", 
+         tl.col = "black", tl.srt = 45)
+
+```
+
+###3. Data Preparation
+```{r}
+train.trans = train.df
+train.trans$TEAM_BATTING_H = train.trans$TEAM_BATTING_H  + train.trans$TEAM_BATTING_2B + train.trans$TEAM_BATTING_3B + train.trans$TEAM_BATTING_HR
+train.trans$TEAM_FIELDING_E = train.trans$TEAM_FIELDING_E + train.trans$TEAM_PITCHING_H
+train.trans = train.trans%>%dplyr::select(-TEAM_BATTING_2B, -TEAM_BATTING_3B, -TEAM_BATTING_HR, -TEAM_PITCHING_H)
+
+summary(train.trans)
+hist(train.trans$TEAM_BATTING_H)
+restrans = cor(train.trans)
+pairs.panels(train.trans, 
+             method = "pearson", # correlation method
+             hist.col = "#00AFBB",
+             density = TRUE,  # show density plots
+             ellipses = TRUE # show correlation ellipses
+             )
+
+train.trans$TEAM_PITCHING_HR = apply(train.trans['TEAM_PITCHING_HR'], 1, function(x) if(x==0){return(0)} else{return(log(x))})
+train.trans$TEAM_PITCHING_BB = apply(train.trans['TEAM_PITCHING_BB'], 1, function(x) if(x==0){return(0)} else{return(log(x))})
+train.trans$TEAM_FIELDING_E = apply(train.trans['TEAM_FIELDING_E'], 1, function(x) if(x==0){return(0)} else{return(log(x))})
+
+pairs.panels(train.trans, 
+             method = "pearson", # correlation method
+             hist.col = "#00AFBB",
+             density = TRUE,  # show density plots
+             ellipses = TRUE # show correlation ellipses
+             )
+
+```
+
+### 4. Build Model
+```{r}
+model1 = lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_BATTING_BB + TEAM_PITCHING_HR + TEAM_PITCHING_BB + TEAM_FIELDING_E, data=train.trans)
+summary(model1)
+
+model2 = lm(TARGET_WINS ~ TEAM_BATTING_H + poly(TEAM_BATTING_BB,2)  + TEAM_PITCHING_HR + poly(TEAM_PITCHING_BB,2) + poly(TEAM_FIELDING_E,2), data=train.trans)
+summary(model2)
+
+model3 = lm(TARGET_WINS ~ TEAM_BATTING_H + poly(TEAM_BATTING_BB,2)  + TEAM_PITCHING_HR + poly(TEAM_PITCHING_BB,2) + poly(TEAM_FIELDING_E,3), data=train.trans)
+summary(model3)
+
+plot(model1)
+plot(model2)
+plot(model3)
+```
+
+### 5. Make prediction using winning model
+
+```{r}
+#1] Load test data
+df.test = read.table("D:/MSDS/MSDSQ4/Data621/HW-1/moneyball-evaluation-data.csv", sep=',', header = TRUE, stringsAsFactors = FALSE)
+#2] SELECT Non Null columns
+df.test = df.test%>%dplyr::select(-INDEX)
+cols.nomiss = cols.nomiss[!cols.nomiss %in%('TARGET_WINS')]
+df.test = df.test%>%dplyr::select(cols.nomiss)
+
+#3] Transform Data
+test.trans = df.test
+test.trans$TEAM_BATTING_H = test.trans$TEAM_BATTING_H  + test.trans$TEAM_BATTING_2B + test.trans$TEAM_BATTING_3B + test.trans$TEAM_BATTING_HR
+test.trans$TEAM_FIELDING_E = test.trans$TEAM_FIELDING_E + test.trans$TEAM_PITCHING_H
+test.trans = test.trans%>%dplyr::select(-TEAM_BATTING_2B, -TEAM_BATTING_3B, -TEAM_BATTING_HR, -TEAM_PITCHING_H)
+
+test.trans$TEAM_PITCHING_HR = apply(test.trans['TEAM_PITCHING_HR'], 1, function(x) if(x==0){return(0)} else{return(log(x))})
+test.trans$TEAM_PITCHING_BB = apply(test.trans['TEAM_PITCHING_BB'], 1, function(x) if(x==0){return(0)} else{return(log(x))})
+test.trans$TEAM_FIELDING_E = apply(test.trans['TEAM_FIELDING_E'], 1, function(x) if(x==0){return(0)} else{return(log(x))})
+
+Target_Wins = predict(model3, newdata = test.trans)
+test.trans$TARGET_WINS = Target_Wins
+
+df.test1 = read.table("D:/MSDS/MSDSQ4/Data621/HW-1/moneyball-evaluation-data.csv", sep=',', header = TRUE, stringsAsFactors = FALSE)
+df.test1$TARGET_WINS = Target_Wins
+write.csv(df.test1, "D:/MSDS/MSDSQ4/Data621/HW-1/Target_Prediction.csv", row.names = FALSE)
+```
