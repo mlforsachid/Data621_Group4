@@ -1,0 +1,466 @@
+---
+title: "Binary Logistic Regression"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: 2
+subtitle: "Data 621: Homework 3 - Group 4"
+author:
+  - "Sachid Deshmukh"
+  - "Michael Yampol"
+  - "Vishal Arora"
+  - "Ann Liu-Ferrara"
+date: "Oct. 20, 2019"
+---
+
+\newpage
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(Hmisc)
+library(ROCR)
+```
+
+```{r echo=FALSE}
+# Set working directory and load the training data
+setwd("D:/MSDS/Data621_Group4/HW-3/Data/")
+train.df = read.csv("./crime-training-data_modified.csv")
+```
+
+# 1. Data Exploration
+
+### **Let's load training dataset and preview.**
+
+#### **Load Data**
+
+```{r echo=FALSE}
+head(train.df)
+print(paste("Number of columns = ", ncol(train.df)))
+print(paste("Number of rows = ", nrow(train.df)))
+```
+
+#### As we can see in the preview, training data has 13 columns and 466 rows
+
+### **Let's analyze datatypes of each column.**
+
+#### **Analyze Datatypes**
+
+```{r echo=FALSE}
+str(train.df)
+
+```
+
+#### All the columns are of numeric types. This indicates that all the variables are quantitative. There are no categorical variables in the training dataset.
+
+### **Let's check if any variables have missing values. Values which are NULL or NA.**
+
+#### **Check missing values**
+
+```{r echo =FALSE}
+miss.cols = apply(train.df, 2, function(x) any(is.na(x)))
+print(paste("Number of columns with missing values = ", length(colnames(miss.cols))))
+```
+
+#### Training dataset have no missing values. This is good because we don't have to impute values for any columns
+
+### **Let's check if the training data is class imbalance. A Dataset is called class imbalance when there are very few obesrvations corresponding to minority class. This is very important in deciding model evaluation metrics.**
+
+#### **Check class Imbalance**
+
+```{r echo=FALSE}
+
+ggplot(train.df, aes(target, fill = as.factor(target))) +
+  geom_bar() +
+  labs(title="Bar Chart: Counts for target variable", 
+       caption="Source: Crime dataset for major city") 
+```
+
+#### Above barchart shows that we have balanced dataset containing enough observations pertaining to both values of target variable. We can see from the above bar chart that we have 237 observations pertaining to low crime rate and 229 observations pertaining to high crime rate. This makes the dataset class balance and we don't need to worry about minority class here.
+
+### **The variables which are highly correlated carry similar information and can affect model accuracy. Highly correlated variables also impacts estimation of model coefficients. Let's figure out which variables in the training datasets are highly correlated to each other**
+
+```{r echo=FALSE}
+  res2<-rcorr(as.matrix(train.df))
+  corrplot(res2$r, type="upper", order="hclust", 
+         p.mat = res2$P, sig.level = 0.05, insig = "blank")
+```
+
+#### From the above correlation graph we can see that target variable is highly correlated with following variables
+
+* **rad: Index of accessibility to radial highways**
+* **tax: Full-value property-tax rate per $10,000**
+* **lstat: Lower status of the population (percent)**
+* **age: Proportion of owner-occupied units built prior to 1940**
+* **indus: Proportion of non-retail business acres per suburb**
+* **nox: Nitrogen oxides concentration**
+* **zn: Proportion of residential land zoned for large lots**
+* **dis: Weighted mean of distances to five Boston employment centers**
+
+#### Let's focus on four variables listed below. These variables are not only corrlelated with outcome variable target but they also have high negative correlation with variable **dis**: Weighted mean of distances to five Boston employment centers
+
+* **age: Proportion of owner-occupied units built prior to 1940**
+* **indus: Proportion of non-retail business acres per suburb**
+* **nox: Nitrogen oxides concentration**
+* **dis: Weighted mean of distances to five Boston employment centers**
+
+#### Let's analyze these four variables in more detail so that we can decide if we can add interaction term for these variables
+
+### **Scatter plot of age and dis**
+
+```{r echo=FALSE}
+ggplot(train.df, aes(x = dis, y=age, color=as.factor(target))) +
+geom_point()
+```
+
+#### From the above scatter plot, we can conclude that lots of properties which are constructed before 1940 are near to Boston employment centers. Above Scatter plot also shows us that there is a high crime rate near the employment centers where we have lots of older properties (properties built before 1940)
+
+### **Scatter plot of indus and dis**
+
+```{r echo=FALSE}
+ggplot(train.df, aes(x = dis, y=indus, color=as.factor(target))) +
+geom_point()
+```
+
+#### Above scatter plot shows that proportion of non retail business decreases as we move away from the Boston employment center. There is a decrease in the crime rate also as we move away from the employment center
+
+### **Scatter plot of nox and dis**
+
+```{r echo=FALSE}
+ggplot(train.df, aes(x = dis, y=nox, color=as.factor(target))) +
+geom_point()
+```
+
+
+#### Above scatter plot shows that there is very high percentage of Nitrogen Oxide near Bostom employment centers. This can be due to area surrounding employment centers have more industries and that leads to more percentage of Nitorgen Oxide
+
+
+# 2. Data Preparation
+
+### **Add Interaction Term**
+
+### From the above scatter plots we can conclude that old properties exists near to Boston employment centers whihc has high percentage of Nitrogen Oxide and high percentage of non retail business acres. All these four terms are correlated and that can also be seen from the correlation graph above. Let's add an interaction term to our dataset which will account for cumulative effect of all these four input variables
+
+```{r}
+train.df$intterm =  ((train.df$dis / (train.df$nox * train.df$indus)) + train.df$age) ^ 0.5
+```
+
+**Let's see how newly added interaction term is helping us to categories target variable**
+
+### **Scatter plot showing effect of newly added interaction term for categorizing data**
+
+```{r echo=FALSE}
+ggplot(train.df, aes(x = seq(1:nrow(train.df)), y=intterm, color=as.factor(target))) +
+geom_point()
+```
+
+
+#### **From the above scatter plot we can see that newly added interaction term is helping us to separate data points pertaining to dfferent target variable values nicely.**
+
+#### **Add new variable by transforming rad variable into buckets**
+
+#### We can bucketize rad variable. Let's devide data into three buckets of rad variable
+
+* **Bucket-1: Indicates low accessibility to highways**
+* **Bucket-2: Indicates medium accessibility to highways**
+* **Bucket-3: Indicates high accessibility to highways**
+
+**Let's see how crime rate is devided into these three buckets after we added newly transformed rad variable**
+
+
+```{r echo=FALSE}
+train.df$radtrans = round(log(1+train.df$rad))
+
+ggplot(train.df, aes(x=radtrans, fill=as.factor(target)))+
+geom_bar()
+```
+
+
+#### From the above bar plot we can see that crime rate is low if there is low accessibility to highways. For medium accessibility crime rate is higher and for areas with highest level of accessibility to highways exhibit highest crime rate. 
+
+**Let's see how transformed rad variable is helping us to categorize data**
+
+```{r echo=FALSE}
+ggplot(train.df, aes(x = seq(1:nrow(train.df)), y=radtrans, color=as.factor(target))) +
+geom_point()
+```
+
+### **Add new variable by transforming tax rate variable into buckets**
+
+#### We can bucketize tax rate variable. Let's devide data into three buckets of tax rate variable
+
+* **Bucket-1: Indicates low tax rate**
+* **Bucket-2: Indicates medium tax rate**
+* **Bucket-3: Indicates high tax rate**
+
+**Let's see how crime rate is devided into these three buckets after we transform tax rate variable**
+
+
+```{r}
+train.df$taxtrans = round(log(1+train.df$tax))
+
+ggplot(train.df, aes(x=taxtrans, fill=as.factor(target)))+
+geom_bar()
+
+```
+
+#### From the above bar plot we can see that crime rate is low in the area of low tax rate. For medium tax rate area crime rate is higher and for areas with highest tax rate exhibit highest crime rate. This make sense since area with higher tax rate have high value properties. Crime rate tend to be higher in the area where property values are higher.
+
+
+**Let's see how transformed tax variable is helping us to categorize data**
+
+```{r echo=FALSE}
+ggplot(train.df, aes(x = seq(1:nrow(train.df)), y=taxtrans, color=as.factor(target))) +
+geom_point()
+```
+
+### **Add new variable by transforming lstat variable**
+
+#### We can bucketize lower status percent variable. Let's devide data into four buckets of lower status percent variable
+
+* **Bucket-1: Indicates very low lower status percent**
+* **Bucket-2: Indicates low lower status percent**
+* **Bucket-3: Indicates medium lower status percent**
+* **Bucket-4: Indicates high lower status percent**
+
+**Let's see how crime rate is devided into these three buckets after we transform tax rate variable**
+
+
+```{r}
+train.df$lstattrans = round(log(train.df$lstat))
+
+ggplot(train.df, aes(x=lstattrans, fill=as.factor(target)))+
+geom_bar()
+
+```
+
+#### From the above bar plot we can see that crime rate increases as lower status percent increases. From this we can conclude that areas with high percentage of lower status population exhibits higher crime rate
+
+**Let's see how transformed lstat variable is helping us to categorize data**
+
+```{r echo=FALSE}
+ggplot(train.df, aes(x = seq(1:nrow(train.df)), y=lstattrans, color=as.factor(target))) +
+geom_point()
+```
+
+### **Add new variable by transforming zn variable**
+
+#### We can bucketize ZN variable. Let's devide data into TWO buckets of ZN variable
+
+* **Bucket-1: Indicates low proportion of residential land zoned for large lots**
+* **Bucket-2: Indicates high proportion of residential land zoned for large lots**
+
+**Let's see how crime rate is devided into these two buckets after we transform ZN variable**
+
+
+```{r}
+train.df$zntrans = round(log(1+train.df$zn^0.5))
+
+ggplot(train.df, aes(x=zntrans, fill=as.factor(target)))+
+geom_bar()
+
+```
+
+#### From the above bar chart we can see that in an area where low proportion of residential land is zoned for larger lots exhibit higher crime rate. Areas where high proportion of residential land is zoned for larger lots exhibit low crime rate
+
+
+**Let's see how transformed zn variable is helping us to categorize data**
+
+```{r echo=FALSE}
+ggplot(train.df, aes(x = seq(1:nrow(train.df)), y=zntrans, color=as.factor(target))) +
+geom_point()
+```
+
+# 3. Build Models
+
+```{r echo=FALSE}
+
+cross.validation <- function(K, model.formula, LCdata) {
+  auclist = NULL
+  accuracylist = NULL
+  recalllist = NULL
+  precisionlist = NULL
+  fold.size <- nrow(LCdata) / K
+  
+  for(k in 1:K){
+    
+    
+    testing.index <- (k-1)*fold.size + 1:fold.size
+    
+    training <- LCdata[-testing.index,]
+    testing.org <- LCdata[testing.index,]
+    testing = testing.org[1:nrow(testing.org), names(testing.org)[names(testing.org) != 'target']]
+    
+    model <- glm(formula = model.formula,
+                 family = "binomial", data = training)
+    predicted <- predict(model, newdata = testing,type="response")
+    pred <- prediction(predicted, testing.org$target)
+    ind = which.max(round(slot(pred, 'cutoffs')[[1]],1) == 0.5)
+    perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+    
+    auc.tmp <- performance(pred,"auc");
+    auc <- as.numeric(auc.tmp@y.values)
+    auclist[k] = auc
+
+    acc.perf = performance(pred, measure = "acc")
+    acc = slot(acc.perf, "y.values")[[1]][ind]
+    accuracylist[k] = acc
+    
+    prec.perf = performance(pred, measure = "prec")
+    prec = slot(prec.perf, "y.values")[[1]][ind]
+    precisionlist[k] = prec
+    
+    recall.perf = performance(pred, measure = "tpr")
+    recall = slot(recall.perf, "y.values")[[1]][ind]
+    recalllist[k] = recall
+    
+    
+    
+  }
+  return(list("AUC" = mean(auclist), "Accuracy" = mean(accuracylist),  "Recall" = mean(recalllist), "Precision" = mean(precisionlist)))
+}
+
+df.metrix <<- NULL
+print.model.matrix = function(model.name, matrixobj)
+{
+  
+  print(paste("Printing Metrix for model: ", model.name))
+  for(i in 1 : length(matrixobj))
+  {
+    df = data.frame("Model" = model.name, "Metrix"=names(matrixobj)[[i]], "Value" = matrixobj[[i]])
+    df.metrix <<- rbind(df, df.metrix)
+    print(paste(names(matrixobj)[[i]], ":", matrixobj[[i]]))
+  }
+  
+}
+
+```
+
+
+### **Model fitting and evaluation**
+
+### **We will use Cross Validation to fit the model and evaluate it. will leverage 5 fold cross validation technique**
+
+### **Cross Validation**
+
+#### It's a model validation techniques for assessing how the results of a statistical analysis (model) will generalize to an independent data set. It is mainly used in settings where the goal is prediction, and one wants to estimate how accurately a predictive model will perform in practice. The goal of cross-validation is to define a data set to test the model in the training phase (i.e. validation data set) in order to limit problems like overfitting,underfitting and get an insight on how the model will generalize to an independent data set.
+
+### **Model Evaluation Metrics**
+
+#### We will use following metrics for model evaluation and comparison
+
+* **ROC AUC** : AUC - ROC curve is a performance measurement for classification problem at various thresholds settings. ROC is a probability curve and AUC represents degree or measure of separability. It tells how much model is capable of distinguishing  between classes. Higher the AUC, better the model is
+
+* **Model Accuracy** : Accuracy is one metric for evaluating classification models. Informally, accuracy is the fraction of predictions our model got right. Formally, accuracy has the following definition: Accuracy = (TP + TN)/(TP + FP + TN + FN)
+
+* **Model Recall** : Recall is a metrics that focuses on how many true positives are identified from total positive observations in the dataset. Formally Recall has following definition: Recall = TP/TP + FN
+
+* **Model Precision** : Model precision is a metric that focuses on how many observations are truely positive out of totally identified positives. Formally Precision has following definition : Precision = TP/TP + FP
+
+**Where**
+
+* **TP** : Stands for True Positives
+* **TN** : Stands for True Negatives
+* **FP** : Stands for False Positives
+* **FN** : Stands for False Negatives
+
+### **Now we are clear on our model fitting and evaluation method (Cross Validation) and also have model evaluation metrics which we will use to compare the model effectiveness we are all set to build different models and access it's performance**
+
+### **We will build three different models and compare them using above mentioned model metrics**
+
+### **1. Base Model**
+
+#### Let's build a base model with following eight predictor
+
+* **rad: Index of accessibility to radial highways**
+* **tax: Full-value property-tax rate per $10,000**
+* **lstat: Lower status of the population (percent)**
+* **age: Proportion of owner-occupied units built prior to 1940**
+* **indus: Proportion of non-retail business acres per suburb**
+* **nox: Nitrogen oxides concentration**
+* **zn: Proportion of residential land zoned for large lots**
+
+```{r echo=TRUE}
+model.metrix = cross.validation(5, "target~ rad+tax+lstat+age+indus+nox+zn+dis", train.df)
+print.model.matrix("Base Model", model.metrix)
+
+```
+
+#### Note that above metrics are from a baseline model. These metrics can act like a baseline to compare model effectiveness as we add more variables to the model.
+
+
+### **2. Model with Interaction Term**
+
+#### Let's add newly created interaction term to the model and see if it improves performance
+
+```{r echo=TRUE}
+model.metrix = cross.validation(5, "target~ rad+tax+lstat+age+indus+nox+zn+dis + intterm", train.df)
+print.model.matrix("Model with interaction term", model.metrix)
+
+```
+
+#### Above metrics are better than baseline model. This proves that the interaction term we have created is hellping to improve model effectiveness towards predicting crime rate.
+
+### **3. Model with transformed variables**
+
+#### In addition to interaction term we will also include newly created transformed variables to the model
+
+```{r echo=TRUE}
+model.metrix = cross.validation(5, "target~ rad+tax+lstat+age+indus+nox+zn+dis + intterm + radtrans + taxtrans", train.df)
+print.model.matrix("Model with transformed variable term", model.metrix)
+
+```
+
+#### Above metrics are even better and beats the performance of model with interactive term. This proves that the interaction term along with transformed variables we have created is helping to improve model effectiveness towards predicting crime rate.
+
+
+# 4. Select Models
+
+### **From the above analysis it is proven that model-3 which has base predictor along with interaction term and transformed variables is the best performing model. Below bar chart shows different models and helps us to compare them on the basis of model metrics**
+
+```{r echo=FALSE}
+ggplot(df.metrix, aes(x = Model, y=Value, fill=Metrix)) +
+  geom_bar(stat='identity', position=position_dodge()) +
+  labs(title="Bar Chart : Model performance evaluation", 
+            caption="Source: Crime Rate dataset of a major city") +
+  coord_flip()
+
+```
+
+### **As we can see from the above bar chart, model-3 is the winning model. We will use model-3 for fitting on train dataset and to predict on evaluation dataset**
+
+# 5. Appendix
+
+### **Fit model and predict on evaluation dataset**
+
+````{r}
+training = train.df
+testing = read.csv("./Data/crime-evaluation-data_modified.csv", stringsAsFactors = FALSE)
+testing$intterm =  ((testing$dis / (testing$nox * testing$indus)) + testing$age) ^ 0.5
+
+testing$radtrans = round(log(1+testing$rad))
+testing$taxtrans = round(log(1+testing$tax))
+
+model.formula = "target~ rad+tax+lstat+age+indus+nox+zn+dis + intterm + radtrans + taxtrans"
+
+
+model <- glm(formula = model.formula,
+             family = "binomial", data = training)
+predicted <- predict(model, newdata = testing,type="response")
+lables = ifelse(predicted > 0.5, 1, 0)
+
+testing$targetproba = round(predicted,1)
+testing$target = lables
+testing = data.frame(testing)
+write.table(testing, "./PredictedOutcome.csv", row.names = FALSE, sep=",")
+
+
+````
