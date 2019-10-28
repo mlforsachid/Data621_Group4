@@ -7,14 +7,14 @@ author:
 - Ann Liu-Ferrara
 date: "Oct. 20, 2019"
 output:
-  pdf_document:
-    number_sections: yes
-    toc: yes
-    toc_depth: 2
   html_document:
     df_print: paged
     toc: yes
     toc_depth: '2'
+  pdf_document:
+    number_sections: no
+    toc: yes
+    toc_depth: 2
 subtitle: 'Data 621: Homework 3 - Group 4'
 ---
 
@@ -103,7 +103,7 @@ plot(Bor.hvo,  cex.axis=0.75, las=2)
 
 ```
 
-#### From the above boruta feature selection chart, all feature variables are confirmed important variables. but chas is clearly the last one, and very close to shadow (random) variables, so it's contribution to the model is questionable.
+#### From the above boruta feature selection chart, all feature variables are confirmed important variables. but chas is clearly the last one, and very close to shadow (random) variables, so its contribution to the model is questionable.
  
 
 ### **The variables which are highly correlated carry similar information and can affect model accuracy. Highly correlated variables also impacts estimation of model coefficients. Let's figure out which variables in the training datasets are highly correlated to each other**
@@ -396,7 +396,7 @@ print.model.matrix = function(model.name, matrixobj)
 
 ### **Now we are clear on our model fitting and evaluation method (Cross Validation) and also have model evaluation metrics which we will use to compare the model effectiveness we are all set to build different models and access it's performance**
 
-### **We will build three different models and compare them using above mentioned model metrics**
+### **We will build five different models and compare them using above mentioned model metrics**
 
 ### **1. Base Model**
 
@@ -446,7 +446,7 @@ print.model.matrix("Model with transformed variable term", model.metrix)
 
 ### **4. Model with original all variables**
 
-#### Use all original 12 variables in the dataset to fit the model without any interation and transformed variables.
+#### Use all original 12 variables in the dataset to fit the model without adding interation and transformed variables.
 
 
 ```{r echo=TRUE}
@@ -455,7 +455,7 @@ print.model.matrix("Model with all original variables", model.metrix)
 
 ```
 
-#### Above metrics are better than 8 variable base model, it is expected as more information was brought in the model by additional variables, the accuracy is close to the 2nd model above with interaction term. 
+#### Above metrics are better than 8 variable base model, it is expected as more information was brought in the model by additional important variables, the accuracy is close to the 2nd model above with interaction term. 
 
 
 
@@ -469,7 +469,7 @@ print.model.matrix("Model with all original variables but chas", model.metrix)
 
 ```
 
-#### Above metrics are better than the 4th model that uses all variables in the model, it proves that removing the tentative variable chas improves the model performance; the accuracy and precision both beat the first 2 models above, but slightly below the model number 3 that has 8 origianl variables plus 3 interaction and transformed variables.
+#### Above metrics show that this model performans better than the 4th model that uses all variables in the model, it proves that removing the less important variable chas improves the model performance; the accuracy and precision both beat the first two models above, but slightly below the model 3, which uses 8 origianl variables plus 3 interaction and transformed variables.
 
 
 # 4. Select Models
@@ -485,7 +485,7 @@ ggplot(df.metrix, aes(x = Model, y=Value, fill=Metrix)) +
 
 ```
 
-### **Discussion. The best 2 models are compared as the bar chart shows below. Both models have 11 variables. The interaction term and transformed variables brought higher accuracy, AUC, and recall to the model, but precision value is very close. The discussion point is that the interaction and transformed variables increase the complexity of the model, we should consideration if the increased complexity on the model outweights the increased performance, and if the model is easy to explain and implement comparing with the simple model without transformation and interaction term.**
+### **Discussion. The best two models are compared in the bar chart below. Both models have 11 variables. The interaction term and transformed variables brought higher accuracy, AUC, and Recall to the model, but the precision values are very close. The discussion point here is that the interaction and transformed variables increase the complexity of the model, we should work with domain experts to see if the increased complexity on the model outweights the increased performance; and if the model is easy to explain and implement comparing to the simple model without transformation and interaction term.**
 
 
 ```{r echo=FALSE}
