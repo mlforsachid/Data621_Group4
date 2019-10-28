@@ -1,21 +1,21 @@
 ---
 title: "Binary Logistic Regression"
+author:
+- Sachid Deshmukh
+- Michael Yampol
+- Vishal Arora
+- Ann Liu-Ferrara
+date: "Oct. 20, 2019"
 output:
-  html_document:
-    df_print: paged
-    toc: yes
-    toc_depth: '2'
   pdf_document:
     number_sections: yes
     toc: yes
     toc_depth: 2
-subtitle: "Data 621: Homework 3 - Group 4"
-author:
-  - "Sachid Deshmukh"
-  - "Michael Yampol"
-  - "Vishal Arora"
-  - "Ann Liu-Ferrara"
-date: "Oct. 20, 2019"
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+subtitle: 'Data 621: Homework 3 - Group 4'
 ---
 
 \newpage
@@ -28,12 +28,15 @@ library(ggplot2)
 library(corrplot)
 library(Hmisc)
 library(ROCR)
+library(parallel)
+library(Boruta)
 ```
 
 ```{r echo=FALSE}
 # Set working directory and load the training data
-setwd("D:/MSDS/Data621_Group4/HW-3/Data/")
-train.df = read.csv("./crime-training-data_modified.csv")
+#setwd("D:/MSDS/Data621_Group4/HW-3/Data/")
+setwd("~/cuny/2019Fall/Data621_Group4/HW-3")
+train.df = read.csv("./Data/crime-training-data_modified.csv")
 ```
 
 # 1. Data Exploration
@@ -85,6 +88,23 @@ ggplot(train.df, aes(target, fill = as.factor(target))) +
 ```
 
 #### Above barchart shows that we have balanced dataset containing enough observations pertaining to both values of target variable. We can see from the above bar chart that we have 237 observations pertaining to low crime rate and 229 observations pertaining to high crime rate. This makes the dataset class balance and we don't need to worry about minority class here.
+
+### **The original variable importance is ranked using Boruta function.**
+
+#### Boruta is one of the feature selection algorithms, uses Random Forest to selection importance variables. It classifies the feature variables into 3 levels based on the p value specified: Confirmed, Rejected or Tentative. 
+
+
+```{r echo=FALSE, message = FALSE, out.width = '100%'}
+set.seed(123)
+Boruta(target~.,data=train.df)->Bor.hvo
+print(Bor.hvo)
+plot(Bor.hvo,  cex.axis=0.75, las=2)
+
+
+```
+
+#### From the above boruta feature selection chart, all feature variables are confirmed important variables. but chas is clearly the last one, and very close to shadow (random) variables, so it's contribution to the model is questionable.
+ 
 
 ### **The variables which are highly correlated carry similar information and can affect model accuracy. Highly correlated variables also impacts estimation of model coefficients. Let's figure out which variables in the training datasets are highly correlated to each other**
 
@@ -279,6 +299,8 @@ ggplot(train.df, aes(x = seq(1:nrow(train.df)), y=zntrans, color=as.factor(targe
 geom_point()
 ```
 
+
+
 # 3. Build Models
 
 ```{r echo=FALSE}
@@ -361,9 +383,9 @@ print.model.matrix = function(model.name, matrixobj)
 
 * **Model Accuracy** : Accuracy is one metric for evaluating classification models. Informally, accuracy is the fraction of predictions our model got right. Formally, accuracy has the following definition: Accuracy = (TP + TN)/(TP + FP + TN + FN)
 
-* **Model Recall** : Recall is a metrics that focuses on how many true positives are identified from total positive observations in the dataset. Formally Recall has following definition: Recall = TP/TP + FN
+* **Model Recall** : Recall is a metrics that focuses on how many true positives are identified from total positive observations in the data set. Formally Recall has following definition: Recall = TP/TP + FN
 
-* **Model Precision** : Model precision is a metric that focuses on how many observations are truely positive out of totally identified positives. Formally Precision has following definition : Precision = TP/TP + FP
+* **Model Precision** : Model precision is a metric that focuses on how many observations are truly positive out of totally identified positives. Formally Precision has following definition : Precision = TP/TP + FP
 
 **Where**
 
@@ -422,6 +444,34 @@ print.model.matrix("Model with transformed variable term", model.metrix)
 #### Above metrics are even better and beats the performance of model with interactive term. This proves that the interaction term along with transformed variables we have created is helping to improve model effectiveness towards predicting crime rate.
 
 
+### **4. Model with original all variables**
+
+#### Use all original 12 variables in the dataset to fit the model without any interation and transformed variables.
+
+
+```{r echo=TRUE}
+model.metrix = cross.validation(5, "target~ rad+tax+lstat+age+indus+nox+zn+dis + medv+rm+ptratio +chas", train.df)
+print.model.matrix("Model with all original variables", model.metrix)
+
+```
+
+#### Above metrics are better than 8 variable base model, it is expected as more information was brought in the model by additional variables, the accuracy is close to the 2nd model above with interaction term. 
+
+
+
+### **5. Model with all original variables except chas**
+
+#### Use all original variables in the dataset except chas variable, as boruta confirms importance to all the variables in the train.df dataset but chas, it was tentative, not as important as other variables.
+
+```{r echo=TRUE}
+model.metrix = cross.validation(5, "target~ rad+tax+lstat+age+indus+nox+zn+dis + medv+rm+ptratio", train.df)
+print.model.matrix("Model with all original variables but chas", model.metrix)
+
+```
+
+#### Above metrics are better than the 4th model that uses all variables in the model, it proves that removing the tentative variable chas improves the model performance; the accuracy and precision both beat the first 2 models above, but slightly below the model number 3 that has 8 origianl variables plus 3 interaction and transformed variables.
+
+
 # 4. Select Models
 
 ### **From the above analysis it is proven that model-3 which has base predictor along with interaction term and transformed variables is the best performing model. Below bar chart shows different models and helps us to compare them on the basis of model metrics**
@@ -435,7 +485,19 @@ ggplot(df.metrix, aes(x = Model, y=Value, fill=Metrix)) +
 
 ```
 
-### **As we can see from the above bar chart, model-3 is the winning model. We will use model-3 for fitting on train dataset and to predict on evaluation dataset**
+### **Discussion. The best 2 models are compared as the bar chart shows below. Both models have 11 variables. The interaction term and transformed variables brought higher accuracy, AUC, and recall to the model, but precision value is very close. The discussion point is that the interaction and transformed variables increase the complexity of the model, we should consideration if the increased complexity on the model outweights the increased performance, and if the model is easy to explain and implement comparing with the simple model without transformation and interaction term.**
+
+
+```{r echo=FALSE}
+selected.metrix <- df.metrix[df.metrix$Model %in% c('Model with all original variables but chas', 
+                                              'Model with transformed variable term'), ]
+ggplot(selected.metrix, aes(x = Metrix, y=Value, fill=Model)) +
+  geom_bar(stat='identity', position=position_dodge()) +
+  labs(title="Best 2 models performance evaluation", 
+            caption="Source: Crime Rate dataset of a major city") +
+  coord_flip()
+
+```
 
 # 5. Appendix
 
