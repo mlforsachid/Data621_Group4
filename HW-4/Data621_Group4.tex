@@ -1,0 +1,1333 @@
+\documentclass[]{article}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\usepackage{fixltx2e} % provides \textsubscript
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+\else % if luatex or xelatex
+  \ifxetex
+    \usepackage{mathspec}
+  \else
+    \usepackage{fontspec}
+  \fi
+  \defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}
+\fi
+% use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+% use microtype if available
+\IfFileExists{microtype.sty}{%
+\usepackage{microtype}
+\UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\hypersetup{unicode=true,
+            pdftitle={Multiple Linear Regression and Binary Logistic Regression},
+            pdfauthor={Sachid Deshmukh; Michael Yampol; Vishal Arora; Ann Liu-Ferrara},
+            pdfborder={0 0 0},
+            breaklinks=true}
+\urlstyle{same}  % don't use monospace font for urls
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.94,0.16,0.16}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.77,0.63,0.00}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.64,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\usepackage{graphicx,grffile}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\IfFileExists{parskip.sty}{%
+\usepackage{parskip}
+}{% else
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2pt minus 1pt}
+}
+\setlength{\emergencystretch}{3em}  % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{0}
+% Redefines (sub)paragraphs to behave more like sections
+\ifx\paragraph\undefined\else
+\let\oldparagraph\paragraph
+\renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+\let\oldsubparagraph\subparagraph
+\renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+%%% Use protect on footnotes to avoid problems with footnotes in titles
+\let\rmarkdownfootnote\footnote%
+\def\footnote{\protect\rmarkdownfootnote}
+
+%%% Change title format to be more compact
+\usepackage{titling}
+
+% Create subtitle command for use in maketitle
+\providecommand{\subtitle}[1]{
+  \posttitle{
+    \begin{center}\large#1\end{center}
+    }
+}
+
+\setlength{\droptitle}{-2em}
+
+  \title{Multiple Linear Regression and Binary Logistic Regression}
+    \pretitle{\vspace{\droptitle}\centering\huge}
+  \posttitle{\par}
+  \subtitle{Data 621: Homework 4 - Group 4}
+  \author{Sachid Deshmukh \\ Michael Yampol \\ Vishal Arora \\ Ann Liu-Ferrara}
+    \preauthor{\centering\large\emph}
+  \postauthor{\par}
+      \predate{\centering\large\emph}
+  \postdate{\par}
+    \date{Nov.~10, 2019}
+
+
+\begin{document}
+\maketitle
+
+{
+\setcounter{tocdepth}{2}
+\tableofcontents
+}
+\newpage
+
+\hypertarget{data-exploration}{%
+\section{1. Data Exploration}\label{data-exploration}}
+
+\hypertarget{lets-load-training-dataset-and-preview.}{%
+\subsubsection{\texorpdfstring{\textbf{Let's load training dataset and
+preview.}}{Let's load training dataset and preview.}}\label{lets-load-training-dataset-and-preview.}}
+
+\begin{verbatim}
+##   INDEX TARGET_FLAG TARGET_AMT KIDSDRIV AGE HOMEKIDS YOJ   INCOME PARENT1
+## 1     1           0          0        0  60        0  11  $67,349      No
+## 2     2           0          0        0  43        0  11  $91,449      No
+## 3     4           0          0        0  35        1  10  $16,039      No
+## 4     5           0          0        0  51        0  14     <NA>      No
+## 5     6           0          0        0  50        0  NA $114,986      No
+## 6     7           1       2946        0  34        1  12 $125,301     Yes
+##   HOME_VAL MSTATUS SEX     EDUCATION           JOB TRAVTIME    CAR_USE
+## 1       $0    z_No   M           PhD  Professional       14    Private
+## 2 $257,252    z_No   M z_High School z_Blue Collar       22 Commercial
+## 3 $124,191     Yes z_F z_High School      Clerical        5    Private
+## 4 $306,251     Yes   M  <High School z_Blue Collar       32    Private
+## 5 $243,925     Yes z_F           PhD        Doctor       36    Private
+## 6       $0    z_No z_F     Bachelors z_Blue Collar       46 Commercial
+##   BLUEBOOK TIF   CAR_TYPE RED_CAR OLDCLAIM CLM_FREQ REVOKED MVR_PTS
+## 1  $14,230  11    Minivan     yes   $4,461        2      No       3
+## 2  $14,940   1    Minivan     yes       $0        0      No       0
+## 3   $4,010   4      z_SUV      no  $38,690        2      No       3
+## 4  $15,440   7    Minivan     yes       $0        0      No       0
+## 5  $18,000   1      z_SUV      no  $19,217        2     Yes       3
+## 6  $17,430   1 Sports Car      no       $0        0      No       0
+##   CAR_AGE          URBANICITY
+## 1      18 Highly Urban/ Urban
+## 2       1 Highly Urban/ Urban
+## 3      10 Highly Urban/ Urban
+## 4       6 Highly Urban/ Urban
+## 5      17 Highly Urban/ Urban
+## 6       7 Highly Urban/ Urban
+\end{verbatim}
+
+\begin{verbatim}
+## [1] "Number of columns =  26"
+\end{verbatim}
+
+\begin{verbatim}
+## [1] "Number of rows =  8161"
+\end{verbatim}
+
+\hypertarget{as-we-can-see-in-the-preview-training-data-has-26-columns-and-8161-rows}{%
+\paragraph{As we can see in the preview, training data has 26 columns
+and 8161
+rows}\label{as-we-can-see-in-the-preview-training-data-has-26-columns-and-8161-rows}}
+
+\hypertarget{lets-analyze-datatypes-of-each-column.}{%
+\subsubsection{\texorpdfstring{\textbf{Let's analyze datatypes of each
+column.}}{Let's analyze datatypes of each column.}}\label{lets-analyze-datatypes-of-each-column.}}
+
+\begin{verbatim}
+## 'data.frame':    8161 obs. of  26 variables:
+##  $ INDEX      : int  1 2 4 5 6 7 8 11 12 13 ...
+##  $ TARGET_FLAG: int  0 0 0 0 0 1 0 1 1 0 ...
+##  $ TARGET_AMT : num  0 0 0 0 0 ...
+##  $ KIDSDRIV   : int  0 0 0 0 0 0 0 1 0 0 ...
+##  $ AGE        : int  60 43 35 51 50 34 54 37 34 50 ...
+##  $ HOMEKIDS   : int  0 0 1 0 0 1 0 2 0 0 ...
+##  $ YOJ        : int  11 11 10 14 NA 12 NA NA 10 7 ...
+##  $ INCOME     : chr  "$67,349" "$91,449" "$16,039" NA ...
+##  $ PARENT1    : chr  "No" "No" "No" "No" ...
+##  $ HOME_VAL   : chr  "$0" "$257,252" "$124,191" "$306,251" ...
+##  $ MSTATUS    : chr  "z_No" "z_No" "Yes" "Yes" ...
+##  $ SEX        : chr  "M" "M" "z_F" "M" ...
+##  $ EDUCATION  : chr  "PhD" "z_High School" "z_High School" "<High School" ...
+##  $ JOB        : chr  "Professional" "z_Blue Collar" "Clerical" "z_Blue Collar" ...
+##  $ TRAVTIME   : int  14 22 5 32 36 46 33 44 34 48 ...
+##  $ CAR_USE    : chr  "Private" "Commercial" "Private" "Private" ...
+##  $ BLUEBOOK   : chr  "$14,230" "$14,940" "$4,010" "$15,440" ...
+##  $ TIF        : int  11 1 4 7 1 1 1 1 1 7 ...
+##  $ CAR_TYPE   : chr  "Minivan" "Minivan" "z_SUV" "Minivan" ...
+##  $ RED_CAR    : chr  "yes" "yes" "no" "yes" ...
+##  $ OLDCLAIM   : chr  "$4,461" "$0" "$38,690" "$0" ...
+##  $ CLM_FREQ   : int  2 0 2 0 2 0 0 1 0 0 ...
+##  $ REVOKED    : chr  "No" "No" "No" "No" ...
+##  $ MVR_PTS    : int  3 0 3 0 3 0 0 10 0 1 ...
+##  $ CAR_AGE    : int  18 1 10 6 17 7 1 7 1 17 ...
+##  $ URBANICITY : chr  "Highly Urban/ Urban" "Highly Urban/ Urban" "Highly Urban/ Urban" "Highly Urban/ Urban" ...
+\end{verbatim}
+
+\hypertarget{as-we-can-see-income-parent1-home_val-mstatus-sex-education-job-car_use-bluebook-car_type-red_car-oldclaim-revoked-and-urbanicity-variables-are-qualitative.-linear-regression-and-logistic-regression-algorithms-works-best-with-numerical-variables.-we-need-to-transform-these-variagles-making-them-quantitative-so-that-we-can-use-them-for-model-training}{%
+\paragraph{As we can see Income, Parent1, Home\_val, MStatus, Sex,
+Education, Job, Car\_Use, BlueBook, Car\_Type, Red\_Car, OldClaim,
+Revoked and UrbaniCity variables are qualitative. Linear Regression and
+Logistic regression algorithms works best with numerical variables. We
+need to transform these variagles making them quantitative so that we
+can use them for model
+training}\label{as-we-can-see-income-parent1-home_val-mstatus-sex-education-job-car_use-bluebook-car_type-red_car-oldclaim-revoked-and-urbanicity-variables-are-qualitative.-linear-regression-and-logistic-regression-algorithms-works-best-with-numerical-variables.-we-need-to-transform-these-variagles-making-them-quantitative-so-that-we-can-use-them-for-model-training}}
+
+\hypertarget{lets-check-if-any-variables-have-missing-values.-values-which-are-null-or-na.}{%
+\subsubsection{\texorpdfstring{\textbf{Let's check if any variables have
+missing values. Values which are NULL or
+NA.}}{Let's check if any variables have missing values. Values which are NULL or NA.}}\label{lets-check-if-any-variables-have-missing-values.-values-which-are-null-or-na.}}
+
+\hypertarget{check-missing-values}{%
+\paragraph{\texorpdfstring{\textbf{Check missing
+values}}{Check missing values}}\label{check-missing-values}}
+
+\begin{verbatim}
+## [1] "Number of columns with missing values =  6"
+\end{verbatim}
+
+\begin{verbatim}
+## [1] "Names of columns with missing values =  AGE, YOJ, INCOME, HOME_VAL, JOB, CAR_AGE"
+\end{verbatim}
+
+\hypertarget{we-can-see-6-variables-namely-age-yoj-income-home_val-job-and-car_age-have-missing-values.-we-will-impute-values-for-these-variables-for-better-model-accuracy.}{%
+\paragraph{We can see 6 variables namely Age, Yoj, Income, Home\_VAL,
+Job and Car\_Age have missing values. We will impute values for these
+variables for better model
+accuracy.}\label{we-can-see-6-variables-namely-age-yoj-income-home_val-job-and-car_age-have-missing-values.-we-will-impute-values-for-these-variables-for-better-model-accuracy.}}
+
+\hypertarget{lets-check-if-the-training-data-is-class-imbalance.-a-dataset-is-called-class-imbalance-when-there-are-very-few-obesrvations-corresponding-to-minority-class.-this-is-very-important-in-deciding-model-evaluation-metrics.}{%
+\subsubsection{\texorpdfstring{\textbf{Let's check if the training data
+is class imbalance. A Dataset is called class imbalance when there are
+very few obesrvations corresponding to minority class. This is very
+important in deciding model evaluation
+metrics.}}{Let's check if the training data is class imbalance. A Dataset is called class imbalance when there are very few obesrvations corresponding to minority class. This is very important in deciding model evaluation metrics.}}\label{lets-check-if-the-training-data-is-class-imbalance.-a-dataset-is-called-class-imbalance-when-there-are-very-few-obesrvations-corresponding-to-minority-class.-this-is-very-important-in-deciding-model-evaluation-metrics.}}
+
+\hypertarget{check-class-imbalance}{%
+\paragraph{\texorpdfstring{\textbf{Check class
+Imbalance}}{Check class Imbalance}}\label{check-class-imbalance}}
+
+\includegraphics{Data621_Group4_files/figure-latex/unnamed-chunk-5-1.pdf}
+
+\hypertarget{above-barchart-indicates-that-training-dataset-is-class-imbalance.-there-are-fewer-observation-of-car-crashes-compared-to-observations-with-no-car-crash.-this-makes-the-dataset-class-imbalance.-for-logistic-regression-we-cant-rely-on-model-metrics-like-accuracy-due-to-this.-since-the-dataset-is-class-imbalance-we-will-give-more-importance-to-precision-recall-and-roc-auc-for-evaluating-logistic-regression-model.}{%
+\paragraph{Above barchart indicates that training dataset is class
+imbalance. There are fewer observation of car crashes compared to
+observations with no car crash. This makes the dataset class imbalance.
+For logistic regression we can't rely on model metrics like Accuracy due
+to this. Since the dataset is class imbalance, we will give more
+importance to Precision, Recall and ROC AUC for evaluating logistic
+regression
+model.}\label{above-barchart-indicates-that-training-dataset-is-class-imbalance.-there-are-fewer-observation-of-car-crashes-compared-to-observations-with-no-car-crash.-this-makes-the-dataset-class-imbalance.-for-logistic-regression-we-cant-rely-on-model-metrics-like-accuracy-due-to-this.-since-the-dataset-is-class-imbalance-we-will-give-more-importance-to-precision-recall-and-roc-auc-for-evaluating-logistic-regression-model.}}
+
+\hypertarget{lets-check-if-red-color-contributes-to-more-car-crashes}{%
+\subsubsection{\texorpdfstring{\textbf{Let's check if Red color
+contributes to more car
+crashes}}{Let's check if Red color contributes to more car crashes}}\label{lets-check-if-red-color-contributes-to-more-car-crashes}}
+
+\includegraphics{Data621_Group4_files/figure-latex/unnamed-chunk-6-1.pdf}
+
+\hypertarget{above-bar-chart-doesnt-show-significant-evidence-that-red-cars-are-more-accident-prone-compare-to-non-red-cars}{%
+\paragraph{Above bar chart doesn't show significant evidence that Red
+cars are more accident prone compare to non red
+cars}\label{above-bar-chart-doesnt-show-significant-evidence-that-red-cars-are-more-accident-prone-compare-to-non-red-cars}}
+
+\hypertarget{lets-check-if-women-are-safe-driver-compared-to-men}{%
+\subsubsection{\texorpdfstring{\textbf{Let's check if women are safe
+driver compared to
+men}}{Let's check if women are safe driver compared to men}}\label{lets-check-if-women-are-safe-driver-compared-to-men}}
+
+\includegraphics{Data621_Group4_files/figure-latex/unnamed-chunk-7-1.pdf}
+
+\hypertarget{above-bar-chart-shows-that-women-have-more-car-crashes-compared-to-men.-we-can-discard-the-fact-that-in-general-women-are-safer-driver-than-men}{%
+\paragraph{Above bar chart shows that women have more car crashes
+compared to men. We can discard the fact that in general women are safer
+driver than
+men}\label{above-bar-chart-shows-that-women-have-more-car-crashes-compared-to-men.-we-can-discard-the-fact-that-in-general-women-are-safer-driver-than-men}}
+
+\hypertarget{data-preparation}{%
+\section{2. Data Preparation}\label{data-preparation}}
+
+\hypertarget{encode-parent1-variable.-no-0-and-yes-1}{%
+\paragraph{\texorpdfstring{\textbf{Encode Parent1 variable. No = 0 and
+Yes =
+1}}{Encode Parent1 variable. No = 0 and Yes = 1}}\label{encode-parent1-variable.-no-0-and-yes-1}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{PARENT1 =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{PARENT1 }\OperatorTok{==}\StringTok{ 'No'}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{PARENT1 =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{PARENT1)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{encode-mstatus-variable.-no-0-and-yes-1}{%
+\paragraph{\texorpdfstring{\textbf{Encode MStatus variable. No = 0 and
+Yes =
+1}}{Encode MStatus variable. No = 0 and Yes = 1}}\label{encode-mstatus-variable.-no-0-and-yes-1}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{MSTATUS =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{MSTATUS }\OperatorTok{==}\StringTok{ 'z_No'}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{MSTATUS =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{MSTATUS)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{encode-sex-variable.-male-0-and-female-1}{%
+\paragraph{\texorpdfstring{\textbf{Encode Sex variable. Male = 0 and
+Female =
+1}}{Encode Sex variable. Male = 0 and Female = 1}}\label{encode-sex-variable.-male-0-and-female-1}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{SEX =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{SEX }\OperatorTok{==}\StringTok{ 'M'}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{SEX =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{SEX)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{encode-education-variable.}{%
+\paragraph{\texorpdfstring{\textbf{Encode Education
+variable.}}{Encode Education variable.}}\label{encode-education-variable.}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{EDUCATION =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(}\KeywordTok{factor}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{EDUCATION, }\DataTypeTok{order =} \OtherTok{TRUE}\NormalTok{, }\DataTypeTok{levels =} \KeywordTok{c}\NormalTok{(}\StringTok{"<High School"}\NormalTok{, }\StringTok{"z_High School"}\NormalTok{, }\StringTok{"Bachelors"}\NormalTok{, }\StringTok{"Masters"}\NormalTok{, }\StringTok{"PhD"}\NormalTok{)))}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{encode-job-variable.}{%
+\paragraph{\texorpdfstring{\textbf{Encode Job
+variable.}}{Encode Job variable.}}\label{encode-job-variable.}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{JOB =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(}\KeywordTok{factor}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{JOB, }\DataTypeTok{order =} \OtherTok{TRUE}\NormalTok{, }\DataTypeTok{levels =} \KeywordTok{c}\NormalTok{(}\StringTok{"Student"}\NormalTok{, }\StringTok{"Home Maker"}\NormalTok{, }\StringTok{"z_Blue Collar"}\NormalTok{, }\StringTok{"Clerical"}\NormalTok{, }\StringTok{"Professional"}\NormalTok{, }\StringTok{'Manager'}\NormalTok{, }\StringTok{'Lawyer'}\NormalTok{, }\StringTok{'Doctor'}\NormalTok{)))}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{encode-car_use-variable.-private-0-and-commercial-1}{%
+\paragraph{\texorpdfstring{\textbf{Encode Car\_Use variable. Private = 0
+and Commercial =
+1}}{Encode Car\_Use variable. Private = 0 and Commercial = 1}}\label{encode-car_use-variable.-private-0-and-commercial-1}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{CAR_USE =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{CAR_USE }\OperatorTok{==}\StringTok{ "Private"}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{CAR_USE  =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{CAR_USE)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{encode-job-variable.-1}{%
+\paragraph{\texorpdfstring{\textbf{Encode Job
+variable.}}{Encode Job variable.}}\label{encode-job-variable.-1}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{CAR_TYPE =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(}\KeywordTok{factor}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{CAR_TYPE, }\DataTypeTok{order =} \OtherTok{TRUE}\NormalTok{, }\DataTypeTok{levels =} \KeywordTok{c}\NormalTok{(}\StringTok{"Minivan"}\NormalTok{, }\StringTok{"z_SUV"}\NormalTok{, }\StringTok{"Van"}\NormalTok{, }\StringTok{"Pickup"}\NormalTok{, }\StringTok{"Panel Truck"}\NormalTok{, }\StringTok{'Sports Car'}\NormalTok{)))}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{encode-red_car-variable.-no-0-and-yes-1}{%
+\paragraph{\texorpdfstring{\textbf{Encode Red\_car variable. No = 0 and
+Yes =
+1}}{Encode Red\_car variable. No = 0 and Yes = 1}}\label{encode-red_car-variable.-no-0-and-yes-1}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{RED_CAR =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{RED_CAR }\OperatorTok{==}\StringTok{ "no"}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{RED_CAR  =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{RED_CAR)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{encode-revoked-variable.-no-0-and-yes-1}{%
+\paragraph{\texorpdfstring{\textbf{Encode Revoked variable. No = 0 and
+Yes =
+1}}{Encode Revoked variable. No = 0 and Yes = 1}}\label{encode-revoked-variable.-no-0-and-yes-1}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{REVOKED =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{REVOKED }\OperatorTok{==}\StringTok{ "No"}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{REVOKED  =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{REVOKED)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{encode-urban-city-variable.-rural-0-and-urban-1}{%
+\paragraph{\texorpdfstring{\textbf{Encode Urban city variable. Rural = 0
+and Urban =
+1}}{Encode Urban city variable. Rural = 0 and Urban = 1}}\label{encode-urban-city-variable.-rural-0-and-urban-1}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{URBANICITY =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{URBANICITY }\OperatorTok{==}\StringTok{ "z_Highly Rural/ Rural"}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{URBANICITY  =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{URBANICITY)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{convert-income-home_val-bluebook-oldclaim-variable-to-quantitative-variable}{%
+\paragraph{\texorpdfstring{\textbf{Convert Income, Home\_val, BlueBook,
+oldClaim Variable to quantitative
+variable}}{Convert Income, Home\_val, BlueBook, oldClaim Variable to quantitative variable}}\label{convert-income-home_val-bluebook-oldclaim-variable-to-quantitative-variable}}
+
+\hypertarget{lets-do-data-imputation-for-missing-columns}{%
+\subsubsection{\texorpdfstring{\textbf{Let's do data imputation for
+missing
+columns}}{Let's do data imputation for missing columns}}\label{lets-do-data-imputation-for-missing-columns}}
+
+\hypertarget{which-columns-are-mssing-and-what-is-a-missing-pattern.-lets-leverage-vim-package-to-get-this-information}{%
+\paragraph{Which columns are mssing and what is a missing pattern. Let's
+leverage VIM package to get this
+information}\label{which-columns-are-mssing-and-what-is-a-missing-pattern.-lets-leverage-vim-package-to-get-this-information}}
+
+\begin{verbatim}
+## Warning in plot.aggr(res, ...): not enough vertical space to display
+## frequencies (too many combinations)
+\end{verbatim}
+
+\includegraphics{Data621_Group4_files/figure-latex/unnamed-chunk-19-1.pdf}
+
+\begin{verbatim}
+## 
+##  Variables sorted by number of missings: 
+##     Variable       Count
+##          JOB 0.064452886
+##      CAR_AGE 0.062492342
+##     HOME_VAL 0.056855777
+##          YOJ 0.055630437
+##       INCOME 0.054527631
+##          AGE 0.000735204
+##        INDEX 0.000000000
+##  TARGET_FLAG 0.000000000
+##   TARGET_AMT 0.000000000
+##     KIDSDRIV 0.000000000
+##     HOMEKIDS 0.000000000
+##      PARENT1 0.000000000
+##      MSTATUS 0.000000000
+##          SEX 0.000000000
+##    EDUCATION 0.000000000
+##     TRAVTIME 0.000000000
+##      CAR_USE 0.000000000
+##     BLUEBOOK 0.000000000
+##          TIF 0.000000000
+##     CAR_TYPE 0.000000000
+##      RED_CAR 0.000000000
+##     OLDCLAIM 0.000000000
+##     CLM_FREQ 0.000000000
+##      REVOKED 0.000000000
+##      MVR_PTS 0.000000000
+##   URBANICITY 0.000000000
+\end{verbatim}
+
+\hypertarget{from-the-above-missing-values-pattern-we-can-see-that-most-of-the-obervation-dont-have-missing-values.-non-missing-values-are-shown-in-blue.-this-is-a-good-news-and-we-can-assert-good-quality-of-data-in-this-case.}{%
+\paragraph{From the above missing values pattern we can see that most of
+the obervation don't have missing values. Non missing values are shown
+in blue. This is a good news and we can assert good quality of data in
+this
+case.}\label{from-the-above-missing-values-pattern-we-can-see-that-most-of-the-obervation-dont-have-missing-values.-non-missing-values-are-shown-in-blue.-this-is-a-good-news-and-we-can-assert-good-quality-of-data-in-this-case.}}
+
+\hypertarget{lets-use-mice-package-to-imput-missing-values}{%
+\subsubsection{\texorpdfstring{\textbf{Let's use MICE package to imput
+missing
+values}}{Let's use MICE package to imput missing values}}\label{lets-use-mice-package-to-imput-missing-values}}
+
+\begin{verbatim}
+## 
+##  iter imp variable
+##   1   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   1   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   2   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   2   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   3   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   3   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   4   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   4   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   5   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   5   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   6   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   6   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   7   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   7   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   8   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   8   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   9   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   9   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   10   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   10   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+\end{verbatim}
+
+\hypertarget{the-variables-which-are-highly-correlated-carry-similar-information-and-can-affect-model-accuracy.-highly-correlated-variables-also-impacts-estimation-of-model-coefficients.-lets-figure-out-which-variables-in-the-training-datasets-are-highly-correlated-to-each-other}{%
+\subsubsection{\texorpdfstring{\textbf{The variables which are highly
+correlated carry similar information and can affect model accuracy.
+Highly correlated variables also impacts estimation of model
+coefficients. Let's figure out which variables in the training datasets
+are highly correlated to each
+other}}{The variables which are highly correlated carry similar information and can affect model accuracy. Highly correlated variables also impacts estimation of model coefficients. Let's figure out which variables in the training datasets are highly correlated to each other}}\label{the-variables-which-are-highly-correlated-carry-similar-information-and-can-affect-model-accuracy.-highly-correlated-variables-also-impacts-estimation-of-model-coefficients.-lets-figure-out-which-variables-in-the-training-datasets-are-highly-correlated-to-each-other}}
+
+\includegraphics{Data621_Group4_files/figure-latex/unnamed-chunk-21-1.pdf}
+
+\hypertarget{from-the-above-correlation-graph-we-can-see-that-target-variable-target_flag-is-highly-correlated-with-following-variables}{%
+\paragraph{From the above correlation graph we can see that target
+variable TARGET\_FLAG is highly correlated with following
+variables}\label{from-the-above-correlation-graph-we-can-see-that-target-variable-target_flag-is-highly-correlated-with-following-variables}}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{REVOKED: License Revoked}
+\item
+  \textbf{MVR\_PTS: Motor Vehicle Record Points}
+\item
+  \textbf{OLD\_CLAIM: Total Claims}
+\item
+  \textbf{CLAIM\_FREQ: Claim Frequency}
+\item
+  \textbf{URBANICITY: Home/Work Area}
+\item
+  \textbf{JOB: Job}
+\item
+  \textbf{INCOME: Income}
+\item
+  \textbf{HOME\_VAL: Home Value}
+\item
+  \textbf{MSTATUS: Maritial Status}
+\item
+  \textbf{CAR\_USE: Use of car}
+\end{itemize}
+
+\hypertarget{in-addition-to-above-variables-following-variables-are-important-for-target_amt-output-variable}{%
+\paragraph{In addition to above variables, following variables are
+important for Target\_Amt output
+variable}\label{in-addition-to-above-variables-following-variables-are-important-for-target_amt-output-variable}}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{BLUEBOOK: Value of vehicle}
+\item
+  \textbf{CAR\_AGE: Age of car}
+\item
+  \textbf{CAR\_TYPE: TType of car}
+\end{itemize}
+
+\hypertarget{add-interaction-terms-to-our-dataset}{%
+\subsubsection{\texorpdfstring{\textbf{Add interaction terms to our
+dataset}}{Add interaction terms to our dataset}}\label{add-interaction-terms-to-our-dataset}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{JOB_EDU =}\StringTok{  }\KeywordTok{round}\NormalTok{(}\KeywordTok{log}\NormalTok{(train.df}\OperatorTok{$}\NormalTok{JOB }\OperatorTok{*}\StringTok{ }\NormalTok{train.df}\OperatorTok{$}\NormalTok{EDUCATION))}
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{HOME_INCOME =}\StringTok{ }\KeywordTok{log}\NormalTok{(}\DecValTok{1}\OperatorTok{+}\StringTok{ }\NormalTok{train.df}\OperatorTok{$}\NormalTok{HOME_VAL) }\OperatorTok{*}\StringTok{ }\KeywordTok{log}\NormalTok{(}\DecValTok{1} \OperatorTok{+}\StringTok{ }\NormalTok{train.df}\OperatorTok{$}\NormalTok{INCOME)}
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{MVR_PTS_Trans =}\StringTok{ }\KeywordTok{round}\NormalTok{(}\KeywordTok{log}\NormalTok{(}\DecValTok{1}\OperatorTok{+}\StringTok{ }\NormalTok{train.df}\OperatorTok{$}\NormalTok{MVR_PTS))}
+\NormalTok{train.df}\OperatorTok{$}\NormalTok{AGE_SEX =}\KeywordTok{log}\NormalTok{(}\DecValTok{1} \OperatorTok{+}\StringTok{ }\NormalTok{train.df}\OperatorTok{$}\NormalTok{AGE) }\OperatorTok{*}\StringTok{ }\NormalTok{(}\DecValTok{1}\OperatorTok{+}\NormalTok{train.df}\OperatorTok{$}\NormalTok{SEX) }
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{build-models---logistic-regression}{%
+\section{3. Build Models - Logistic
+Regression}\label{build-models---logistic-regression}}
+
+\hypertarget{model-fitting-and-evaluation}{%
+\subsubsection{\texorpdfstring{\textbf{Model fitting and
+evaluation}}{Model fitting and evaluation}}\label{model-fitting-and-evaluation}}
+
+\hypertarget{for-model-evaluation-we-will-use-train-test-split-technique.-since-goal-of-the-exercise-is-to-predict-car-crashes-we-will-build-high-recall-model}{%
+\subsubsection{\texorpdfstring{\textbf{For model evaluation we will use
+train test split technique. Since goal of the exercise is to predict car
+crashes, we will build high recall
+model}}{For model evaluation we will use train test split technique. Since goal of the exercise is to predict car crashes, we will build high recall model}}\label{for-model-evaluation-we-will-use-train-test-split-technique.-since-goal-of-the-exercise-is-to-predict-car-crashes-we-will-build-high-recall-model}}
+
+\hypertarget{high-recall-model}{%
+\subsubsection{\texorpdfstring{\textbf{High Recall
+Model}}{High Recall Model}}\label{high-recall-model}}
+
+\hypertarget{high-recall-model-focuses-on-identifying-maximum-possible-positive-instance.-in-this-case-it-means-we-are-optimizing-our-model-to-identify-as-much-potential-car-crash-target-as-possible.-note-that-sometimes-this-can-come-at-the-cost-of-precision-where-we-might-get-high-number-of-false-positives}{%
+\paragraph{High recall model focuses on identifying maximum possible
+positive instance. In this case it means we are optimizing our model to
+identify as much potential car crash target as possible. Note that
+sometimes this can come at the cost of precision where we might get high
+number of false
+positives}\label{high-recall-model-focuses-on-identifying-maximum-possible-positive-instance.-in-this-case-it-means-we-are-optimizing-our-model-to-identify-as-much-potential-car-crash-target-as-possible.-note-that-sometimes-this-can-come-at-the-cost-of-precision-where-we-might-get-high-number-of-false-positives}}
+
+\hypertarget{model-evaluation-metrics}{%
+\subsubsection{\texorpdfstring{\textbf{Model Evaluation
+Metrics}}{Model Evaluation Metrics}}\label{model-evaluation-metrics}}
+
+\hypertarget{we-will-use-following-metrics-for-model-evaluation-and-comparison}{%
+\paragraph{We will use following metrics for model evaluation and
+comparison}\label{we-will-use-following-metrics-for-model-evaluation-and-comparison}}
+
+\begin{itemize}
+\item
+  \textbf{ROC AUC} : AUC - ROC curve is a performance measurement for
+  classification problem at various thresholds settings. ROC is a
+  probability curve and AUC represents degree or measure of
+  separability. It tells how much model is capable of distinguishing
+  between classes. Higher the AUC, better the model is
+\item
+  \textbf{Model Accuracy} : Accuracy is one metric for evaluating
+  classification models. Informally, accuracy is the fraction of
+  predictions our model got right. Formally, accuracy has the following
+  definition: Accuracy = (TP + TN)/(TP + FP + TN + FN)
+\item
+  \textbf{Model Recall} : Recall is a metrics that focuses on how many
+  true positives are identified from total positive observations in the
+  data set. Formally Recall has following definition: Recall = TP/TP +
+  FN
+\item
+  \textbf{Model Precision} : Model precision is a metric that focuses on
+  how many observations are truly positive out of totally identified
+  positives. Formally Precision has following definition : Precision =
+  TP/TP + FP
+\end{itemize}
+
+\textbf{Where}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{TP} : Stands for True Positives
+\item
+  \textbf{TN} : Stands for True Negatives
+\item
+  \textbf{FP} : Stands for False Positives
+\item
+  \textbf{FN} : Stands for False Negatives
+\end{itemize}
+
+\hypertarget{now-we-are-clear-on-our-model-fitting-and-evaluation-method-train-test-split-and-also-have-model-evaluation-metrics-recall-which-we-will-use-to-compare-the-model-effectiveness-we-are-all-set-to-build-different-models-and-access-its-performance}{%
+\subsubsection{\texorpdfstring{\textbf{Now we are clear on our model
+fitting and evaluation method (Train test split) and also have model
+evaluation metrics (Recall) which we will use to compare the model
+effectiveness we are all set to build different models and access it's
+performance}}{Now we are clear on our model fitting and evaluation method (Train test split) and also have model evaluation metrics (Recall) which we will use to compare the model effectiveness we are all set to build different models and access it's performance}}\label{now-we-are-clear-on-our-model-fitting-and-evaluation-method-train-test-split-and-also-have-model-evaluation-metrics-recall-which-we-will-use-to-compare-the-model-effectiveness-we-are-all-set-to-build-different-models-and-access-its-performance}}
+
+\hypertarget{we-will-build-three-different-models-and-compare-them-using-above-mentioned-model-metrics}{%
+\subsubsection{\texorpdfstring{\textbf{We will build three different
+models and compare them using above mentioned model
+metrics}}{We will build three different models and compare them using above mentioned model metrics}}\label{we-will-build-three-different-models-and-compare-them-using-above-mentioned-model-metrics}}
+
+\hypertarget{lets-build-model-with-important-predictors-as-per-above-analysis}{%
+\subsubsection{\texorpdfstring{\textbf{1. Let's build model with
+important predictors as per above
+analysis}}{1. Let's build model with important predictors as per above analysis}}\label{lets-build-model-with-important-predictors-as-per-above-analysis}}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{REVOKED: License Revoked}
+\item
+  \textbf{MVR\_PTS: Motor Vehicle Record Points}
+\item
+  \textbf{OLD\_CLAIM: Total Claims}
+\item
+  \textbf{CLAIM\_FREQ: Claim Frequency}
+\item
+  \textbf{URBANICITY: Home/Work Area}
+\item
+  \textbf{JOB: Job}
+\item
+  \textbf{INCOME: Income}
+\item
+  \textbf{HOME\_VAL: Home Value}
+\item
+  \textbf{MSTATUS: Maritial Status}
+\item
+  \textbf{CAR\_USE: Use of car}
+\item
+  \textbf{CAR\_TYPE: Type of Car}
+\end{itemize}
+
+\hypertarget{model-with-selected-important-variables}{%
+\subsubsection{\texorpdfstring{\textbf{1. Model with selected important
+variables}}{1. Model with selected important variables}}\label{model-with-selected-important-variables}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{model.metrix =}\StringTok{ }\KeywordTok{model.fit.evaluate}\NormalTok{(}\StringTok{"target ~ INCOME + HOME_VAL + MSTATUS  + JOB + CAR_USE + CAR_TYPE + OLDCLAIM + CLM_FREQ + REVOKED + MVR_PTS + URBANICITY"}\NormalTok{, train.data, test.data)}
+\KeywordTok{print.model.matrix}\NormalTok{(}\StringTok{"Base Model"}\NormalTok{, model.metrix)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "Printing Metrix for model:  Base Model"
+## [1] "AUC : 0.781038017616685"
+## [1] "Accuracy : 0.768068599428338"
+## [1] "Recall : 0.287650602409639"
+## [1] "Precision : 0.667832167832168"
+\end{verbatim}
+
+\hypertarget{model-with-all-the-predictor-with-transformed-variables}{%
+\subsubsection{\texorpdfstring{\textbf{2. Model with all the predictor
+with transformed
+variables}}{2. Model with all the predictor with transformed variables}}\label{model-with-all-the-predictor-with-transformed-variables}}
+
+\hypertarget{we-will-add-new-variables-to-model}{%
+\paragraph{We will add new variables to
+model}\label{we-will-add-new-variables-to-model}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{model.metrix =}\StringTok{ }\KeywordTok{model.fit.evaluate}\NormalTok{(}\StringTok{"target ~ KIDSDRIV + AGE + HOMEKIDS + YOJ + INCOME + PARENT1 + HOME_VAL + MSTATUS+ SEX + EDUCATION + JOB + TRAVTIME + CAR_USE + BLUEBOOK  + TIF + CAR_TYPE + RED_CAR + OLDCLAIM + CLM_FREQ + REVOKED + MVR_PTS + CAR_AGE + URBANICITY + JOB_EDU + MVR_PTS_Trans + HOME_INCOME + AGE_SEX"}\NormalTok{, train.data, test.data)}
+\KeywordTok{print.model.matrix}\NormalTok{(}\StringTok{"Interaction Term"}\NormalTok{, model.metrix)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "Printing Metrix for model:  Interaction Term"
+## [1] "AUC : 0.794767304512163"
+## [1] "Accuracy : 0.775826868109432"
+## [1] "Recall : 0.337349397590361"
+## [1] "Precision : 0.672672672672673"
+\end{verbatim}
+
+\hypertarget{model-with-balanced-training-set}{%
+\subsubsection{\texorpdfstring{\textbf{3. Model with balanced training
+set}}{3. Model with balanced training set}}\label{model-with-balanced-training-set}}
+
+\hypertarget{since-we-know-that-data-is-class-imbalance-we-will-use-rose-package-and-leverage-sythetic-data-generation-technique-to-balance-the-training-data.}{%
+\paragraph{Since we know that data is class imbalance, we will use ROSE
+package and leverage sythetic data generation technique to balance the
+training
+data.}\label{since-we-know-that-data-is-class-imbalance-we-will-use-rose-package-and-leverage-sythetic-data-generation-technique-to-balance-the-training-data.}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{train.data.balanced <-}\StringTok{ }\KeywordTok{ROSE}\NormalTok{(target }\OperatorTok{~}\StringTok{ }\NormalTok{., }\DataTypeTok{data =}\NormalTok{ train.data, }\DataTypeTok{seed =} \DecValTok{1}\NormalTok{)}\OperatorTok{$}\NormalTok{data}
+\NormalTok{model.metrix =}\StringTok{ }\KeywordTok{model.fit.evaluate}\NormalTok{(}\StringTok{"target ~ KIDSDRIV + AGE + HOMEKIDS + YOJ + INCOME + PARENT1 + HOME_VAL + MSTATUS+ SEX + EDUCATION + JOB + TRAVTIME + CAR_USE + BLUEBOOK  + TIF + CAR_TYPE + RED_CAR + OLDCLAIM + CLM_FREQ + REVOKED + MVR_PTS + CAR_AGE + URBANICITY + JOB_EDU + MVR_PTS_Trans + HOME_INCOME + AGE_SEX"}\NormalTok{, train.data.balanced, test.data)}
+\KeywordTok{print.model.matrix}\NormalTok{(}\StringTok{"Class Balanced"}\NormalTok{, model.metrix)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "Printing Metrix for model:  Class Balanced"
+## [1] "AUC : 0.790119300732339"
+## [1] "Accuracy : 0.746835443037975"
+## [1] "Recall : 0.635542168674699"
+## [1] "Precision : 0.5275"
+\end{verbatim}
+
+\hypertarget{from-the-above-results-we-can-see-that-model-which-uses-all-the-variables-along-with-newly-added-interaction-term-and-which-has-class-balance-data-performs-better.-we-will-use-this-model-for-prediction}{%
+\paragraph{From the above results we can see that model which uses all
+the variables along with newly added interaction term and which has
+class balance data performs better. We will use this model for
+prediction}\label{from-the-above-results-we-can-see-that-model-which-uses-all-the-variables-along-with-newly-added-interaction-term-and-which-has-class-balance-data-performs-better.-we-will-use-this-model-for-prediction}}
+
+\hypertarget{model-coefficient-analysis}{%
+\subsubsection{\texorpdfstring{\textbf{4. Model coefficient
+analysis}}{4. Model coefficient analysis}}\label{model-coefficient-analysis}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{fit =}\StringTok{ }\KeywordTok{glm}\NormalTok{(}\DataTypeTok{formula =} \StringTok{"target ~ KIDSDRIV + AGE + HOMEKIDS + YOJ + INCOME + PARENT1 + HOME_VAL + MSTATUS+ SEX + EDUCATION + JOB + TRAVTIME + CAR_USE + BLUEBOOK  + TIF + CAR_TYPE + RED_CAR + OLDCLAIM + CLM_FREQ + REVOKED + MVR_PTS + CAR_AGE + URBANICITY + JOB_EDU + MVR_PTS_Trans + HOME_INCOME + AGE_SEX"}\NormalTok{, }\DataTypeTok{data =}\NormalTok{ train.df.class)}
+
+\KeywordTok{summary}\NormalTok{(fit)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Call:
+## glm(formula = "target ~ KIDSDRIV + AGE + HOMEKIDS + YOJ + INCOME + PARENT1 + HOME_VAL + MSTATUS+ SEX + EDUCATION + JOB + TRAVTIME + CAR_USE + BLUEBOOK  + TIF + CAR_TYPE + RED_CAR + OLDCLAIM + CLM_FREQ + REVOKED + MVR_PTS + CAR_AGE + URBANICITY + JOB_EDU + MVR_PTS_Trans + HOME_INCOME + AGE_SEX", 
+##     data = train.df.class)
+## 
+## Deviance Residuals: 
+##     Min       1Q   Median       3Q      Max  
+## -0.9871  -0.2812  -0.1128   0.2871   1.1862  
+## 
+## Coefficients:
+##                 Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)    2.192e-01  9.737e-02   2.251 0.024417 *  
+## KIDSDRIV       6.135e-02  9.760e-03   6.286 3.42e-10 ***
+## AGE            1.039e-03  1.501e-03   0.692 0.488812    
+## HOMEKIDS       5.686e-03  5.618e-03   1.012 0.311566    
+## YOJ            2.048e-04  1.284e-03   0.160 0.873257    
+## INCOME        -7.131e-07  1.705e-07  -4.182 2.91e-05 ***
+## PARENT1        6.852e-02  1.735e-02   3.950 7.88e-05 ***
+## HOME_VAL       1.524e-07  9.602e-08   1.587 0.112449    
+## MSTATUS       -6.807e-02  1.280e-02  -5.319 1.07e-07 ***
+## SEX            1.856e-01  1.522e-01   1.219 0.222801    
+## EDUCATION     -3.203e-02  8.504e-03  -3.766 0.000167 ***
+## JOB           -1.491e-02  5.132e-03  -2.906 0.003674 ** 
+## TRAVTIME       2.008e-03  2.763e-04   7.267 4.00e-13 ***
+## CAR_USE        1.188e-01  1.127e-02  10.545  < 2e-16 ***
+## BLUEBOOK      -4.058e-06  5.880e-07  -6.901 5.54e-12 ***
+## TIF           -7.678e-03  1.044e-03  -7.356 2.07e-13 ***
+## CAR_TYPE       1.722e-02  2.707e-03   6.362 2.10e-10 ***
+## RED_CAR       -9.730e-03  1.278e-02  -0.762 0.446373    
+## OLDCLAIM      -2.398e-06  6.373e-07  -3.762 0.000170 ***
+## CLM_FREQ       3.378e-02  4.717e-03   7.162 8.65e-13 ***
+## REVOKED        1.592e-01  1.486e-02  10.712  < 2e-16 ***
+## MVR_PTS        3.603e-02  4.883e-03   7.378 1.77e-13 ***
+## CAR_AGE       -8.086e-04  1.058e-03  -0.764 0.444658    
+## URBANICITY     2.823e-01  1.178e-02  23.958  < 2e-16 ***
+## JOB_EDU        2.232e-02  1.370e-02   1.629 0.103341    
+## MVR_PTS_Trans -4.242e-02  1.352e-02  -3.137 0.001713 ** 
+## HOME_INCOME   -6.314e-04  1.770e-04  -3.568 0.000362 ***
+## AGE_SEX       -4.151e-02  3.990e-02  -1.040 0.298173    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## (Dispersion parameter for gaussian family taken to be 0.1519754)
+## 
+##     Null deviance: 1585  on 8160  degrees of freedom
+## Residual deviance: 1236  on 8133  degrees of freedom
+## AIC: 7814.2
+## 
+## Number of Fisher Scoring iterations: 2
+\end{verbatim}
+
+\hypertarget{following-conclusions-can-be-drawn-from-model-coefficients}{%
+\paragraph{\texorpdfstring{\textbf{Following conclusions can be drawn
+from model
+coefficients}}{Following conclusions can be drawn from model coefficients}}\label{following-conclusions-can-be-drawn-from-model-coefficients}}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{KidsDriv: As number of kids driver increses log odds of car
+  crash also increases}
+\item
+  \textbf{Age: Not very significant in predicting car crash}
+\item
+  \textbf{HomeKids: Not very significant in predicting car crash}
+\item
+  \textbf{YOJ: Not very significant in predicting car crash}
+\item
+  \textbf{Income: As Income increases log odds of car crash decreases}
+\item
+  \textbf{Home\_Val: Not very important for predicting car crash}
+\item
+  \textbf{MStatus: If you are married, it decreases the log odds of car
+  crash}
+\item
+  \textbf{Education: As education increases log odds of car crash
+  decreases}
+\item
+  \textbf{Jobs: Higher the job level less likely the log odds of car
+  crash}
+\item
+  \textbf{Travtime: Longer the travel time increases the log odds of car
+  crash}
+\item
+  \textbf{Car Use: Commercial cars have more risk compared to private
+  cars}
+\item
+  \textbf{BlueBook: As the cost of cars increases log odds of car crash
+  decreases}
+\item
+  \textbf{TIF: Longer the people are in force less risky it becomes}
+\item
+  \textbf{Red\_Car: As expected a car being red doesn't contribute to
+  car crash}
+\item
+  \textbf{Clm\_Freq, Revoked and Mvr\_Pts: As expected all these
+  variables increases the risk of car crash}
+\item
+  \textbf{Urbanicity : Interestigly Work area is more prone to car
+  crashes than home area}
+\end{itemize}
+
+\hypertarget{from-the-above-analysis-it-is-proven-that-model-3-which-uses-all-the-variables-along-with-newly-added-interaction-term-and-which-has-class-balance-data-performs-better.-we-will-use-this-model-for-prediction.-below-bar-chart-shows-different-models-and-helps-us-to-compare-them-on-the-basis-of-model-metrics}{%
+\paragraph{\texorpdfstring{\textbf{From the above analysis it is proven
+that model-3 which uses all the variables along with newly added
+interaction term and which has class balance data performs better. We
+will use this model for prediction. Below bar chart shows different
+models and helps us to compare them on the basis of model
+metrics}}{From the above analysis it is proven that model-3 which uses all the variables along with newly added interaction term and which has class balance data performs better. We will use this model for prediction. Below bar chart shows different models and helps us to compare them on the basis of model metrics}}\label{from-the-above-analysis-it-is-proven-that-model-3-which-uses-all-the-variables-along-with-newly-added-interaction-term-and-which-has-class-balance-data-performs-better.-we-will-use-this-model-for-prediction.-below-bar-chart-shows-different-models-and-helps-us-to-compare-them-on-the-basis-of-model-metrics}}
+
+\includegraphics{Data621_Group4_files/figure-latex/unnamed-chunk-29-1.pdf}
+
+\hypertarget{build-models---multiple-linear-regression}{%
+\section{4. Build Models - Multiple Linear
+Regression}\label{build-models---multiple-linear-regression}}
+
+\hypertarget{for-linear-regression-model-we-will-use-cross-validation-technique.-we-will-use-root-mean-square-as-a-model-evaluation-metric.-model-with-lower-rmse-will-be-the-best-model.}{%
+\paragraph{For Linear regression model we will use cross validation
+technique. We will use Root Mean Square as a model evaluation metric.
+Model with lower RMSE will be the best
+model.}\label{for-linear-regression-model-we-will-use-cross-validation-technique.-we-will-use-root-mean-square-as-a-model-evaluation-metric.-model-with-lower-rmse-will-be-the-best-model.}}
+
+\hypertarget{rmse-sqrtsumactual-value---predicted-value2}{%
+\paragraph{\texorpdfstring{\textbf{RMSE = sqrt(sum(Actual Value -
+Predicted
+Value)\^{}2)}}{RMSE = sqrt(sum(Actual Value - Predicted Value)\^{}2)}}\label{rmse-sqrtsumactual-value---predicted-value2}}
+
+\hypertarget{model-with-selected-important-variables-1}{%
+\subsubsection{\texorpdfstring{\textbf{1. Model with selected important
+variables}}{1. Model with selected important variables}}\label{model-with-selected-important-variables-1}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{model.metrix =}\StringTok{ }\KeywordTok{lm.cv}\NormalTok{(}\StringTok{"target ~ INCOME + HOME_VAL + MSTATUS  + JOB + CAR_USE + CAR_TYPE + OLDCLAIM + CLM_FREQ + REVOKED + MVR_PTS + URBANICITY + BLUEBOOK + CAR_AGE"}\NormalTok{, train.df.reg)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Warning in CVlm(data = input.data, form.lm = formula(form), m = 2, plotit = "Residual", : 
+## 
+##  As there is >1 explanatory variable, cross-validation
+##  predicted values for a fold are not a linear function
+##  of corresponding overall predicted values.  Lines that
+##  are shown for the different folds are approximate
+\end{verbatim}
+
+\includegraphics{Data621_Group4_files/figure-latex/unnamed-chunk-32-1.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{print.rmse}\NormalTok{(model.metrix}\OperatorTok{$}\NormalTok{output)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "Root Mean Square =  355315.14804385"
+\end{verbatim}
+
+\hypertarget{from-the-above-residual-plot-we-can-see-that-residuals-are-y-axis-imbalance-and-heterogenious.}{%
+\paragraph{From the above residual plot we can see that residuals are y
+axis imbalance and
+heterogenious.}\label{from-the-above-residual-plot-we-can-see-that-residuals-are-y-axis-imbalance-and-heterogenious.}}
+
+\hypertarget{model-with-boxcox-transformation-along-with-logarithmic-transformation-of-output-variable.-we-are-also-selecting-fewer-variables-as-per-important-regression-coefficients}{%
+\subsubsection{\texorpdfstring{\textbf{2. Model with BoxCox
+transformation along with logarithmic transformation of output variable.
+We are also selecting fewer variables as per important regression
+coefficients}}{2. Model with BoxCox transformation along with logarithmic transformation of output variable. We are also selecting fewer variables as per important regression coefficients}}\label{model-with-boxcox-transformation-along-with-logarithmic-transformation-of-output-variable.-we-are-also-selecting-fewer-variables-as-per-important-regression-coefficients}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{bc <-}\StringTok{ }\KeywordTok{boxcox}\NormalTok{(train.df.reg}\OperatorTok{$}\NormalTok{BLUEBOOK }\OperatorTok{~}\StringTok{ }\KeywordTok{log}\NormalTok{(train.df.reg}\OperatorTok{$}\NormalTok{target))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{Data621_Group4_files/figure-latex/unnamed-chunk-33-1.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{lambda <-}\StringTok{ }\NormalTok{bc}\OperatorTok{$}\NormalTok{x[}\KeywordTok{which.max}\NormalTok{(bc}\OperatorTok{$}\NormalTok{y)]}
+
+\NormalTok{train.df.reg}\OperatorTok{$}\NormalTok{target_TRAN =}\StringTok{ }\KeywordTok{log}\NormalTok{(train.df.reg}\OperatorTok{$}\NormalTok{target)}
+\NormalTok{train.df.reg}\OperatorTok{$}\NormalTok{BLUEBOOK_TRAN =}\StringTok{ }\NormalTok{(train.df.reg}\OperatorTok{$}\NormalTok{BLUEBOOK}\OperatorTok{^}\NormalTok{lambda }\DecValTok{-1}\NormalTok{)}\OperatorTok{/}\NormalTok{lambda}
+
+\NormalTok{model.metrix =}\StringTok{ }\KeywordTok{lm.cv}\NormalTok{(}\StringTok{"target_TRAN ~ BLUEBOOK_TRAN + MVR_PTS + CAR_AGE + CAR_TYPE"}\NormalTok{, train.df.reg)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Warning in CVlm(data = input.data, form.lm = formula(form), m = 2, plotit = "Residual", : 
+## 
+##  As there is >1 explanatory variable, cross-validation
+##  predicted values for a fold are not a linear function
+##  of corresponding overall predicted values.  Lines that
+##  are shown for the different folds are approximate
+\end{verbatim}
+
+\includegraphics{Data621_Group4_files/figure-latex/unnamed-chunk-33-2.pdf}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{model.metrix}\OperatorTok{$}\NormalTok{output}\OperatorTok{$}\NormalTok{Predicted =}\StringTok{ }\KeywordTok{exp}\NormalTok{(model.metrix}\OperatorTok{$}\NormalTok{output}\OperatorTok{$}\NormalTok{Predicted)}
+\KeywordTok{print.rmse}\NormalTok{(model.metrix}\OperatorTok{$}\NormalTok{output)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "Root Mean Square =  366286.69929848"
+\end{verbatim}
+
+\hypertarget{above-residual-plot-looks-better.-it-is-balanced-on-both-the-axis-and-homogenious}{%
+\paragraph{Above residual plot looks better. It is balanced on both the
+axis and
+homogenious}\label{above-residual-plot-looks-better.-it-is-balanced-on-both-the-axis-and-homogenious}}
+
+\hypertarget{we-can-see-that-model-with-box-cox-transformation-along-with-target-variable-logarithmic-transformation-gives-us-higher-rmse-comapared-to-model-with-important-variable.-however-diffrence-in-rmse-is-not-that-big-and-in-general-it-is-alway-best-practice-to-select-model-with-lower-variables-toavoid-overfitting.-for-this-reason-we-will-choose-second-model-model-with-box-cox-transformation-with-fewer-variables-for-prediction}{%
+\paragraph{\texorpdfstring{\textbf{We can see that model with box cox
+transformation along with target variable logarithmic transformation
+gives us higher RMSE comapared to model with important variable. However
+diffrence in RMSE is not that big and in general it is alway best
+practice to select model with lower variables toavoid overfitting. For
+this reason we will choose second model (Model with box cox
+transformation with fewer variables) for
+prediction}}{We can see that model with box cox transformation along with target variable logarithmic transformation gives us higher RMSE comapared to model with important variable. However diffrence in RMSE is not that big and in general it is alway best practice to select model with lower variables toavoid overfitting. For this reason we will choose second model (Model with box cox transformation with fewer variables) for prediction}}\label{we-can-see-that-model-with-box-cox-transformation-along-with-target-variable-logarithmic-transformation-gives-us-higher-rmse-comapared-to-model-with-important-variable.-however-diffrence-in-rmse-is-not-that-big-and-in-general-it-is-alway-best-practice-to-select-model-with-lower-variables-toavoid-overfitting.-for-this-reason-we-will-choose-second-model-model-with-box-cox-transformation-with-fewer-variables-for-prediction}}
+
+\hypertarget{regression-model-coefficient-analysis}{%
+\subsubsection{\texorpdfstring{\textbf{3. Regression model coefficient
+analysis}}{3. Regression model coefficient analysis}}\label{regression-model-coefficient-analysis}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{fit =}\StringTok{ }\KeywordTok{lm}\NormalTok{(target_TRAN }\OperatorTok{~}\StringTok{ }\NormalTok{BLUEBOOK_TRAN }\OperatorTok{+}\StringTok{ }\NormalTok{MVR_PTS }\OperatorTok{+}\StringTok{ }\NormalTok{CAR_AGE }\OperatorTok{+}\StringTok{ }\NormalTok{CAR_TYPE }\OperatorTok{+}\StringTok{ }\NormalTok{REVOKED }\OperatorTok{+}\StringTok{ }\NormalTok{SEX, train.df.reg)}
+\KeywordTok{summary}\NormalTok{(fit)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Call:
+## lm(formula = target_TRAN ~ BLUEBOOK_TRAN + MVR_PTS + CAR_AGE + 
+##     CAR_TYPE + REVOKED + SEX, data = train.df.reg)
+## 
+## Residuals:
+##     Min      1Q  Median      3Q     Max 
+## -4.7888 -0.4018  0.0342  0.4030  3.1519 
+## 
+## Coefficients:
+##                 Estimate Std. Error t value Pr(>|t|)    
+## (Intercept)    7.865e+00  8.550e-02  91.983  < 2e-16 ***
+## BLUEBOOK_TRAN  4.232e-03  7.686e-04   5.506  4.1e-08 ***
+## MVR_PTS        1.395e-02  6.753e-03   2.066   0.0389 *  
+## CAR_AGE        3.301e-05  3.216e-03   0.010   0.9918    
+## CAR_TYPE       2.532e-03  1.054e-02   0.240   0.8102    
+## REVOKED       -2.926e-02  4.300e-02  -0.681   0.4962    
+## SEX           -5.424e-02  3.511e-02  -1.545   0.1226    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Residual standard error: 0.8062 on 2146 degrees of freedom
+## Multiple R-squared:  0.01838,    Adjusted R-squared:  0.01564 
+## F-statistic: 6.699 on 6 and 2146 DF,  p-value: 4.857e-07
+\end{verbatim}
+
+\hypertarget{interestingly-we-can-see-that-only-two-variables-are-statistically-significant-and-contributing-towards-target-amount-prediction.}{%
+\paragraph{Interestingly we can see that only two variables are
+statistically significant and contributing towards target amount
+prediction.}\label{interestingly-we-can-see-that-only-two-variables-are-statistically-significant-and-contributing-towards-target-amount-prediction.}}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{BLUEBOOK : Vlaue of car is very important factor in
+  determining claim amount. This perfectly makes sense}
+\item
+  \textbf{MVR\_PTS: Number of traffic tickets is next important
+  variable. Note that coefficient is positive which indicates pay out
+  amount increases with number of ticket violation. This is counter
+  intuitive. Ideally more the traffic violations lesser should be the
+  payout. However we will use this model since this is giving us lower
+  RMSE indicating better model fit}
+\end{itemize}
+
+\hypertarget{regression-model-redicual-analysis}{%
+\subsubsection{\texorpdfstring{\textbf{3. Regression model redicual
+analysis}}{3. Regression model redicual analysis}}\label{regression-model-redicual-analysis}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{qqnorm}\NormalTok{(fit}\OperatorTok{$}\NormalTok{residuals)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{Data621_Group4_files/figure-latex/unnamed-chunk-35-1.pdf}
+
+\hypertarget{from-the-residual-normality-plots-we-can-see-that-residuals-are-normally-distributed.-this-satisfies-the-normality-assumption-of-residuals-for-multiple-regression-model.}{%
+\paragraph{From the residual normality plots we can see that residuals
+are normally distributed. This satisfies the normality assumption of
+residuals for multiple regression
+model.}\label{from-the-residual-normality-plots-we-can-see-that-residuals-are-normally-distributed.-this-satisfies-the-normality-assumption-of-residuals-for-multiple-regression-model.}}
+
+\hypertarget{select-models}{%
+\section{5. Select Models}\label{select-models}}
+
+\hypertarget{read-evaluation-data-and-clean.-create-required-interaction-terms}{%
+\subsubsection{\texorpdfstring{\textbf{1. Read evaluation data and
+clean. Create required interaction
+terms}}{1. Read evaluation data and clean. Create required interaction terms}}\label{read-evaluation-data-and-clean.-create-required-interaction-terms}}
+
+\begin{verbatim}
+## 
+##  iter imp variable
+##   1   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   1   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   2   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   2   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   3   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   3   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   4   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   4   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   5   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   5   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   6   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   6   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   7   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   7   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   8   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   8   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   9   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   9   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   10   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   10   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+\end{verbatim}
+
+\begin{verbatim}
+## Warning: Number of logged events: 2
+\end{verbatim}
+
+\hypertarget{logistic-regression}{%
+\subsubsection{\texorpdfstring{\textbf{Logistic
+Regression}}{Logistic Regression}}\label{logistic-regression}}
+
+\hypertarget{for-logistic-regression-we-will-use-model-3.-model-3-uses-balanced-dataset-using-synthetic-data-genration-technique-smote-and-also-leverages-other-variable-to-determine-risk-of-car-crashes}{%
+\paragraph{For Logistic regression we will use Model-3. Model-3 uses
+balanced dataset using Synthetic Data Genration technique (SMOTE) and
+also leverages other variable to determine risk of car
+crashes}\label{for-logistic-regression-we-will-use-model-3.-model-3-uses-balanced-dataset-using-synthetic-data-genration-technique-smote-and-also-leverages-other-variable-to-determine-risk-of-car-crashes}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{model.formula =}\StringTok{ "target ~ KIDSDRIV + AGE + HOMEKIDS + YOJ + INCOME + PARENT1 + HOME_VAL + MSTATUS+ SEX + EDUCATION + JOB + TRAVTIME + CAR_USE + BLUEBOOK  + TIF + CAR_TYPE + RED_CAR + OLDCLAIM + CLM_FREQ + REVOKED + MVR_PTS + CAR_AGE + URBANICITY + JOB_EDU + MVR_PTS_Trans + HOME_INCOME + AGE_SEX"}
+
+
+\NormalTok{model <-}\StringTok{ }\KeywordTok{glm}\NormalTok{(}\DataTypeTok{formula =}\NormalTok{ model.formula, }\DataTypeTok{family =} \StringTok{"binomial"}\NormalTok{, }\DataTypeTok{data =}\NormalTok{ train.data.balanced)}
+
+
+
+\NormalTok{predicted <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(model, }\DataTypeTok{newdata =}\NormalTok{ testing,}\DataTypeTok{type=}\StringTok{"response"}\NormalTok{)}
+\NormalTok{lables =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(predicted }\OperatorTok{>}\StringTok{ }\FloatTok{0.5}\NormalTok{, }\DecValTok{1}\NormalTok{, }\DecValTok{0}\NormalTok{)}
+
+\NormalTok{testing}\OperatorTok{$}\NormalTok{TARGET_FLAG_Proba =}\StringTok{ }\KeywordTok{round}\NormalTok{(predicted,}\DecValTok{1}\NormalTok{)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{TARGET_FLAG =}\StringTok{ }\NormalTok{lables}
+\NormalTok{testing =}\StringTok{ }\KeywordTok{data.frame}\NormalTok{(testing)}
+\CommentTok{#write.table(testing, "./Data/PredictedOutcome.csv", row.names = FALSE, sep=",")}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{multiple-linear-regression}{%
+\subsubsection{\texorpdfstring{\textbf{Multiple Linear
+Regression}}{Multiple Linear Regression}}\label{multiple-linear-regression}}
+
+\hypertarget{for-multiple-linear-regression-we-will-use-the-second-model.-second-model-uses-box-cox-transfomration-and-fewer-variable.-even-though-rmse-is-lower-we-are-sticking-to-this-model-due-to-fewer-variables-and-explainability}{%
+\paragraph{For multiple linear regression we will use the second model.
+Second model uses Box Cox transfomration and fewer variable. Even though
+RMSE is lower we are sticking to this model due to fewer variables and
+explainability}\label{for-multiple-linear-regression-we-will-use-the-second-model.-second-model-uses-box-cox-transfomration-and-fewer-variable.-even-though-rmse-is-lower-we-are-sticking-to-this-model-due-to-fewer-variables-and-explainability}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{model.formula =}\StringTok{ "target_TRAN ~ BLUEBOOK_TRAN + MVR_PTS + CAR_AGE + CAR_TYPE"}
+
+
+\NormalTok{model <-}\StringTok{ }\KeywordTok{lm}\NormalTok{(}\DataTypeTok{formula =}\NormalTok{ model.formula,  }\DataTypeTok{data =}\NormalTok{ train.df.reg)}
+
+
+
+\NormalTok{predicted <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(model, }\DataTypeTok{newdata =}\NormalTok{ testing)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{TARGET_AMT =}\StringTok{ }\NormalTok{testing}\OperatorTok{$}\NormalTok{TARGET_FLAG }\OperatorTok{*}\StringTok{ }\KeywordTok{exp}\NormalTok{(predicted)}
+\NormalTok{testing =}\StringTok{ }\KeywordTok{data.frame}\NormalTok{(testing)}
+\KeywordTok{write.table}\NormalTok{(testing, }\StringTok{"./Data/PredictedOutcome.csv"}\NormalTok{, }\DataTypeTok{row.names =} \OtherTok{FALSE}\NormalTok{, }\DataTypeTok{sep=}\StringTok{","}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{appendix}{%
+\section{6. Appendix}\label{appendix}}
+
+\hypertarget{train-test-split-validation-code}{%
+\paragraph{\texorpdfstring{\textbf{Train Test Split Validation
+Code}}{Train Test Split Validation Code}}\label{train-test-split-validation-code}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{model.fit.evaluate <-}\StringTok{ }\ControlFlowTok{function}\NormalTok{(model.formula, train.data, test.data) \{}
+\NormalTok{  auclist =}\StringTok{ }\OtherTok{NULL}
+\NormalTok{  accuracylist =}\StringTok{ }\OtherTok{NULL}
+\NormalTok{  recalllist =}\StringTok{ }\OtherTok{NULL}
+\NormalTok{  precisionlist =}\StringTok{ }\OtherTok{NULL}
+\NormalTok{  k =}\DecValTok{1}
+  \KeywordTok{set.seed}\NormalTok{(}\DecValTok{123}\NormalTok{)}
+  
+\NormalTok{  training <-train.data}
+\NormalTok{  testing.org<-test.data}
+  
+\NormalTok{  testing =}\StringTok{ }\NormalTok{testing.org[}\DecValTok{1}\OperatorTok{:}\KeywordTok{nrow}\NormalTok{(testing.org), }\KeywordTok{names}\NormalTok{(testing.org)[}\KeywordTok{names}\NormalTok{(testing.org) }\OperatorTok{!=}\StringTok{ 'target'}\NormalTok{]]}
+  
+\NormalTok{  model <-}\StringTok{ }\KeywordTok{glm}\NormalTok{(}\DataTypeTok{formula =}\NormalTok{ model.formula,}
+               \DataTypeTok{family =} \StringTok{"binomial"}\NormalTok{, }\DataTypeTok{data =}\NormalTok{ training)}
+\NormalTok{  predicted <-}\StringTok{ }\KeywordTok{predict}\NormalTok{(model, }\DataTypeTok{newdata =}\NormalTok{ testing,}\DataTypeTok{type=}\StringTok{"response"}\NormalTok{)}
+\NormalTok{  pred <-}\StringTok{ }\KeywordTok{prediction}\NormalTok{(predicted, testing.org}\OperatorTok{$}\NormalTok{target)}
+\NormalTok{  ind =}\StringTok{ }\KeywordTok{which.max}\NormalTok{(}\KeywordTok{round}\NormalTok{(}\KeywordTok{slot}\NormalTok{(pred, }\StringTok{'cutoffs'}\NormalTok{)[[}\DecValTok{1}\NormalTok{]],}\DecValTok{1}\NormalTok{) }\OperatorTok{==}\StringTok{ }\FloatTok{0.5}\NormalTok{)}
+\NormalTok{  perf <-}\StringTok{ }\KeywordTok{performance}\NormalTok{(pred, }\DataTypeTok{measure =} \StringTok{"tpr"}\NormalTok{, }\DataTypeTok{x.measure =} \StringTok{"fpr"}\NormalTok{)}
+  
+\NormalTok{  auc.tmp <-}\StringTok{ }\KeywordTok{performance}\NormalTok{(pred,}\StringTok{"auc"}\NormalTok{);}
+\NormalTok{  auc <-}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(auc.tmp}\OperatorTok{@}\NormalTok{y.values)}
+\NormalTok{  auclist[k] =}\StringTok{ }\NormalTok{auc}
+  
+\NormalTok{  acc.perf =}\StringTok{ }\KeywordTok{performance}\NormalTok{(pred, }\DataTypeTok{measure =} \StringTok{"acc"}\NormalTok{)}
+\NormalTok{  acc =}\StringTok{ }\KeywordTok{slot}\NormalTok{(acc.perf, }\StringTok{"y.values"}\NormalTok{)[[}\DecValTok{1}\NormalTok{]][ind]}
+\NormalTok{  accuracylist[k] =}\StringTok{ }\NormalTok{acc}
+  
+\NormalTok{  prec.perf =}\StringTok{ }\KeywordTok{performance}\NormalTok{(pred, }\DataTypeTok{measure =} \StringTok{"prec"}\NormalTok{)}
+\NormalTok{  prec =}\StringTok{ }\KeywordTok{slot}\NormalTok{(prec.perf, }\StringTok{"y.values"}\NormalTok{)[[}\DecValTok{1}\NormalTok{]][ind]}
+\NormalTok{  precisionlist[k] =}\StringTok{ }\NormalTok{prec}
+  
+\NormalTok{  recall.perf =}\StringTok{ }\KeywordTok{performance}\NormalTok{(pred, }\DataTypeTok{measure =} \StringTok{"tpr"}\NormalTok{)}
+\NormalTok{  recall =}\StringTok{ }\KeywordTok{slot}\NormalTok{(recall.perf, }\StringTok{"y.values"}\NormalTok{)[[}\DecValTok{1}\NormalTok{]][ind]}
+\NormalTok{  recalllist[k] =}\StringTok{ }\NormalTok{recall}
+  
+    
+    
+  \KeywordTok{return}\NormalTok{(}\KeywordTok{list}\NormalTok{(}\StringTok{"AUC"}\NormalTok{ =}\StringTok{ }\KeywordTok{mean}\NormalTok{(auclist), }\StringTok{"Accuracy"}\NormalTok{ =}\StringTok{ }\KeywordTok{mean}\NormalTok{(accuracylist),  }\StringTok{"Recall"}\NormalTok{ =}\StringTok{ }\KeywordTok{mean}\NormalTok{(recalllist), }\StringTok{"Precision"}\NormalTok{ =}\StringTok{ }\KeywordTok{mean}\NormalTok{(precisionlist)))}
+\NormalTok{\}}
+
+\NormalTok{df.metrix <<-}\StringTok{ }\OtherTok{NULL}
+\NormalTok{print.model.matrix =}\StringTok{ }\ControlFlowTok{function}\NormalTok{(model.name, matrixobj)}
+\NormalTok{\{}
+  
+  \KeywordTok{print}\NormalTok{(}\KeywordTok{paste}\NormalTok{(}\StringTok{"Printing Metrix for model: "}\NormalTok{, model.name))}
+  \ControlFlowTok{for}\NormalTok{(i }\ControlFlowTok{in} \DecValTok{1} \OperatorTok{:}\StringTok{ }\KeywordTok{length}\NormalTok{(matrixobj))}
+\NormalTok{  \{}
+\NormalTok{    df =}\StringTok{ }\KeywordTok{data.frame}\NormalTok{(}\StringTok{"Model"}\NormalTok{ =}\StringTok{ }\NormalTok{model.name, }\StringTok{"Metrix"}\NormalTok{=}\KeywordTok{names}\NormalTok{(matrixobj)[[i]], }\StringTok{"Value"}\NormalTok{ =}\StringTok{ }\NormalTok{matrixobj[[i]])}
+\NormalTok{    df.metrix <<-}\StringTok{ }\KeywordTok{rbind}\NormalTok{(df, df.metrix)}
+    \KeywordTok{print}\NormalTok{(}\KeywordTok{paste}\NormalTok{(}\KeywordTok{names}\NormalTok{(matrixobj)[[i]], }\StringTok{":"}\NormalTok{, matrixobj[[i]]))}
+\NormalTok{  \}}
+  
+\NormalTok{\}}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{linear-regression-cross-validation-code}{%
+\paragraph{\texorpdfstring{\textbf{Linear Regression Cross Validation
+Code}}{Linear Regression Cross Validation Code}}\label{linear-regression-cross-validation-code}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{lm.cv =}\StringTok{ }\ControlFlowTok{function}\NormalTok{(form,input.data)}
+\NormalTok{\{}
+\NormalTok{  out <-}\StringTok{ }\KeywordTok{CVlm}\NormalTok{(}\DataTypeTok{data =}\NormalTok{ input.data, }\DataTypeTok{form.lm =} \KeywordTok{formula}\NormalTok{(form),}\DataTypeTok{m=}\DecValTok{2}\NormalTok{,}\DataTypeTok{plotit=} \StringTok{"Residual"}\NormalTok{, }\DataTypeTok{printit =} \OtherTok{FALSE}\NormalTok{)}
+\NormalTok{  cv.rmse <-}\StringTok{ }\KeywordTok{sqrt}\NormalTok{(}\KeywordTok{attr}\NormalTok{(out,}\StringTok{"ms"}\NormalTok{))}
+  \KeywordTok{return}\NormalTok{(}\KeywordTok{list}\NormalTok{(}\StringTok{'output'}\NormalTok{ =}\StringTok{ }\NormalTok{out))}
+\NormalTok{\}}
+\NormalTok{print.rmse =}\StringTok{ }\ControlFlowTok{function}\NormalTok{(output.df)}
+\NormalTok{\{}
+\NormalTok{  rss =}\StringTok{ }\KeywordTok{sum}\NormalTok{((output.df}\OperatorTok{$}\NormalTok{target }\OperatorTok{-}\StringTok{ }\NormalTok{output.df}\OperatorTok{$}\NormalTok{Predicted)}\OperatorTok{^}\DecValTok{2}\NormalTok{)}
+  \KeywordTok{print}\NormalTok{(}\KeywordTok{paste}\NormalTok{(}\StringTok{'Root Mean Square = '}\NormalTok{, }\KeywordTok{sqrt}\NormalTok{(rss)))}
+\NormalTok{\}}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{evaluation-data-cleanup-code}{%
+\paragraph{\texorpdfstring{\textbf{Evaluation data cleanup
+code}}{Evaluation data cleanup code}}\label{evaluation-data-cleanup-code}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{testing =}\StringTok{ }\KeywordTok{read.csv}\NormalTok{(}\StringTok{"./Data/insurance-evaluation-data.csv"}\NormalTok{, }\DataTypeTok{stringsAsFactors =} \OtherTok{FALSE}\NormalTok{, }\DataTypeTok{na.strings=}\KeywordTok{c}\NormalTok{(}\StringTok{"NA"}\NormalTok{,}\StringTok{"NaN"}\NormalTok{, }\StringTok{" "}\NormalTok{, }\StringTok{""}\NormalTok{))}
+
+\NormalTok{testing}\OperatorTok{$}\NormalTok{PARENT1 =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(testing}\OperatorTok{$}\NormalTok{PARENT1 }\OperatorTok{==}\StringTok{ 'No'}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{PARENT1 =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(testing}\OperatorTok{$}\NormalTok{PARENT1)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{MSTATUS =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(testing}\OperatorTok{$}\NormalTok{MSTATUS }\OperatorTok{==}\StringTok{ 'z_No'}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{MSTATUS =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(testing}\OperatorTok{$}\NormalTok{MSTATUS)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{SEX =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(testing}\OperatorTok{$}\NormalTok{SEX }\OperatorTok{==}\StringTok{ 'M'}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{SEX =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(testing}\OperatorTok{$}\NormalTok{SEX)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{EDUCATION =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(}\KeywordTok{factor}\NormalTok{(testing}\OperatorTok{$}\NormalTok{EDUCATION, }\DataTypeTok{order =} \OtherTok{TRUE}\NormalTok{, }\DataTypeTok{levels =} \KeywordTok{c}\NormalTok{(}\StringTok{"<High School"}\NormalTok{, }\StringTok{"z_High School"}\NormalTok{, }\StringTok{"Bachelors"}\NormalTok{, }\StringTok{"Masters"}\NormalTok{, }\StringTok{"PhD"}\NormalTok{)))}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{JOB =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(}\KeywordTok{factor}\NormalTok{(testing}\OperatorTok{$}\NormalTok{JOB, }\DataTypeTok{order =} \OtherTok{TRUE}\NormalTok{, }\DataTypeTok{levels =} \KeywordTok{c}\NormalTok{(}\StringTok{"Student"}\NormalTok{, }\StringTok{"Home Maker"}\NormalTok{, }\StringTok{"z_Blue Collar"}\NormalTok{, }\StringTok{"Clerical"}\NormalTok{, }\StringTok{"Professional"}\NormalTok{, }\StringTok{'Manager'}\NormalTok{, }\StringTok{'Lawyer'}\NormalTok{, }\StringTok{'Doctor'}\NormalTok{)))}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{CAR_USE =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(testing}\OperatorTok{$}\NormalTok{CAR_USE }\OperatorTok{==}\StringTok{ "Private"}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{CAR_USE  =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(testing}\OperatorTok{$}\NormalTok{CAR_USE)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{CAR_TYPE =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(}\KeywordTok{factor}\NormalTok{(testing}\OperatorTok{$}\NormalTok{CAR_TYPE, }\DataTypeTok{order =} \OtherTok{TRUE}\NormalTok{, }\DataTypeTok{levels =} \KeywordTok{c}\NormalTok{(}\StringTok{"Minivan"}\NormalTok{, }\StringTok{"z_SUV"}\NormalTok{, }\StringTok{"Van"}\NormalTok{, }\StringTok{"Pickup"}\NormalTok{, }\StringTok{"Panel Truck"}\NormalTok{, }\StringTok{'Sports Car'}\NormalTok{)))}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{RED_CAR =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(testing}\OperatorTok{$}\NormalTok{RED_CAR }\OperatorTok{==}\StringTok{ "no"}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{RED_CAR  =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(testing}\OperatorTok{$}\NormalTok{RED_CAR)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{REVOKED =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(testing}\OperatorTok{$}\NormalTok{REVOKED }\OperatorTok{==}\StringTok{ "No"}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{REVOKED  =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(testing}\OperatorTok{$}\NormalTok{REVOKED)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{URBANICITY =}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(testing}\OperatorTok{$}\NormalTok{URBANICITY }\OperatorTok{==}\StringTok{ "z_Highly Rural/ Rural"}\NormalTok{, }\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{URBANICITY  =}\StringTok{ }\KeywordTok{as.numeric}\NormalTok{(testing}\OperatorTok{$}\NormalTok{URBANICITY)}
+
+\NormalTok{testing =}\StringTok{ }\KeywordTok{apply}\NormalTok{(testing[], }\DecValTok{2}\NormalTok{, }\ControlFlowTok{function}\NormalTok{(x) }\KeywordTok{ConvertQuatitative}\NormalTok{(x)) }\OperatorTok{%>%}\KeywordTok{data.frame}\NormalTok{()}
+\NormalTok{comp.data <-}\StringTok{ }\KeywordTok{mice}\NormalTok{(testing,}\DataTypeTok{m=}\DecValTok{2}\NormalTok{,}\DataTypeTok{maxit=}\DecValTok{10}\NormalTok{,}\DataTypeTok{meth=}\StringTok{'pmm'}\NormalTok{,}\DataTypeTok{seed=}\DecValTok{500}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+##  iter imp variable
+##   1   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   1   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   2   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   2   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   3   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   3   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   4   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   4   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   5   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   5   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   6   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   6   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   7   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   7   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   8   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   8   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   9   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   9   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   10   1  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+##   10   2  AGE  YOJ  INCOME  HOME_VAL  JOB  CAR_AGE
+\end{verbatim}
+
+\begin{verbatim}
+## Warning: Number of logged events: 2
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{testing =}\StringTok{ }\KeywordTok{complete}\NormalTok{(comp.data)}
+\NormalTok{testing =}\StringTok{ }\NormalTok{testing[, }\OperatorTok{!}\KeywordTok{names}\NormalTok{(testing) }\OperatorTok{%in%}\StringTok{ }\KeywordTok{c}\NormalTok{(}\StringTok{'Index'}\NormalTok{, }\StringTok{'TARGET_FLAG'}\NormalTok{, }\StringTok{'TARGET_AMT'}\NormalTok{)]}
+
+\NormalTok{testing}\OperatorTok{$}\NormalTok{JOB_EDU =}\StringTok{  }\KeywordTok{round}\NormalTok{(}\KeywordTok{log}\NormalTok{(testing}\OperatorTok{$}\NormalTok{JOB }\OperatorTok{*}\StringTok{ }\NormalTok{testing}\OperatorTok{$}\NormalTok{EDUCATION))}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{HOME_INCOME =}\StringTok{ }\KeywordTok{log}\NormalTok{(}\DecValTok{1}\OperatorTok{+}\StringTok{ }\NormalTok{testing}\OperatorTok{$}\NormalTok{HOME_VAL) }\OperatorTok{*}\StringTok{ }\KeywordTok{log}\NormalTok{(}\DecValTok{1} \OperatorTok{+}\StringTok{ }\NormalTok{testing}\OperatorTok{$}\NormalTok{INCOME)}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{MVR_PTS_Trans =}\StringTok{ }\KeywordTok{round}\NormalTok{(}\KeywordTok{log}\NormalTok{(}\DecValTok{1}\OperatorTok{+}\StringTok{ }\NormalTok{testing}\OperatorTok{$}\NormalTok{MVR_PTS))}
+\NormalTok{testing}\OperatorTok{$}\NormalTok{AGE_SEX =}\KeywordTok{log}\NormalTok{(}\DecValTok{1} \OperatorTok{+}\StringTok{ }\NormalTok{testing}\OperatorTok{$}\NormalTok{AGE) }\OperatorTok{*}\StringTok{ }\NormalTok{(}\DecValTok{1}\OperatorTok{+}\NormalTok{testing}\OperatorTok{$}\NormalTok{SEX) }
+\NormalTok{testing}\OperatorTok{$}\NormalTok{BLUEBOOK_TRAN =}\StringTok{ }\NormalTok{(testing}\OperatorTok{$}\NormalTok{BLUEBOOK}\OperatorTok{^}\NormalTok{lambda }\DecValTok{-1}\NormalTok{)}\OperatorTok{/}\NormalTok{lambda}
+\end{Highlighting}
+\end{Shaded}
+
+
+\end{document}
