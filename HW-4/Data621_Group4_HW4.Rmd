@@ -1,0 +1,950 @@
+---
+title: "Multiple Linear Regression and Binary Logistic Regression"
+author:
+- Sachid Deshmukh
+- Michael Yampol
+- Vishal Arora
+- Ann Liu-Ferrara
+date: "Nov. 15, 2019"
+output:
+  pdf_document:
+    number_sections: no
+    toc: yes
+    toc_depth: 2
+  html_document:
+    df_print: paged
+    highlight: pygments
+    theme: cerulean
+    code_folding: show
+    toc: yes
+    toc_float: yes
+    toc_depth: 3
+classoption: landscape
+subtitle: 'Data 621: Homework 4 - Group 4'
+---
+<style>
+  .main-container {
+    max-width: 1200px !important;
+  }
+</style>
+---
+
+\newpage
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(Hmisc)
+library(ROCR)
+library(parallel)
+library(Boruta)
+library(VIM)
+library(mice)
+library(knitr)
+library(ROSE)
+library(DAAG)
+library(MASS)
+mydir = "C:/Users/Michael/Dropbox/priv/CUNY/MSDS/201909-Fall/DATA621_Nasrin/20191115_HW4_Insurance/HW-4"
+#opts_knit$set(root.dir = "D:/MSDS/Data621_Group4/HW-4/")
+opts_knit$set(root.dir = mydir)
+```
+
+```{r echo=FALSE}
+# Set working directory and load the training data
+#setwd("D:/MSDS/Data621_Group4/HW-4/Data/")
+setwd(mydir)
+train.df = read.csv("./Data/insurance_training_data.csv", stringsAsFactors = FALSE, na.strings=c("NA","NaN", " ", ""))
+```
+
+\newpage
+# 1. Data Exploration
+
+### **Let's load the training dataset and preview it:**
+
+```{r echo=FALSE}
+head(train.df)
+print(paste("Number of columns = ", ncol(train.df)))
+print(paste("Number of rows = ", nrow(train.df)))
+```
+
+#### As we can see from the preview, the training dataset has 26 columns and 8161 rows.
+
+### **Let's examine the datatypes of each column:**
+
+```{r echo=FALSE}
+str(train.df)
+
+```
+
+#### The following quantitative variables are currently stored as character strings:   
+
+* INCOME
+* HOME_VAL 
+* BLUEBOOK 
+* OLDCLAIM
+
+#### We need to convert the above variables to numeric.
+
+#### The following variables are categorical, but they are not stored as factors:
+
+* TARGET_FLAG
+* Parent1 
+* MStatus 
+* Sex
+* Education 
+* Job
+* Car_Use 
+* Car_Type 
+* Red_Car 
+* Revoked 
+* Urbanicity  
+
+
+#### Linear Regression and Logistic regression algorithms work best with numerical variables. 
+#### We need to transform these variables, making them quantitative, so that we can use them for model training.
+
+
+### **Check missing values**
+
+#### Let's check if any variables have missing values, i.e., values which are NULL or NA.
+
+```{r echo =FALSE}
+miss.cols = apply(train.df, 2, function(x) any(is.na(x)))
+print(paste("Number of columns with missing values = ", length(names(miss.cols[miss.cols==TRUE]))))
+print(paste("Names of columns with missing values = ", paste(names(miss.cols[miss.cols==TRUE]), collapse = ', ')))
+      
+```
+
+#### We can that there are 6 variables which have missing values: 
+
+* Age 
+* Yoj
+* Income
+* Home_Val
+* Job
+* Car_Age
+
+#### We will impute values for these variables for better model accuracy.
+
+\newpage
+### **Check Class-Imbalance**
+
+#### Let's check if the training data is **class-imbalanced.**    
+
+#### A Dataset is called ***class-imbalanced*** when there are very few obesrvations corresponding to a minority class. This is very important in selecting model evaluation metrics.
+
+```{r echo=FALSE}
+
+ggplot(train.df, aes(TARGET_FLAG, fill = as.factor(TARGET_FLAG))) +
+  geom_bar() +
+  labs(title="Bar Chart: Counts for target variable", 
+       caption="Source: Crime dataset for major city") 
+```
+
+#### The above barchart indicates that training dataset ***is*** class-imbalanced: There are fewer observations of customers who exhibit car crashes compared to observations of customers with no car crash. This makes the dataset class-imbalanced. 
+#### For logistic regression, we can't rely on model metrics like ***Accuracy*** because of this.    
+#### Since the dataset is class-imbalanced, we will give more importance to ***Precision***, ***Recall*** and ***ROC AUC*** for evaluating logistic regression models.
+
+\newpage
+### **Red-colored cars**
+
+#### Let's check if **Red colored cars** crash more frequently:
+
+```{r prop-tables-red-car-crash, echo=F}
+red_crash_table <- table(train.df$TARGET_FLAG,train.df$RED_CAR)
+rownames(red_crash_table) <- c("No Crash","Crash")
+colnames(red_crash_table) <- c("NotRed","Red")
+```
+
+#### Counts of car crashes vs. red or not red
+```{r red-crash-table, echo=F}
+red_crash_table
+```
+
+#### Mosaicplot of car crashes vs. red or not red
+```{r mosaic-plot-red-crash, echo=F}
+mosaicplot(red_crash_table, col=c("lightblue","pink"))
+```
+
+
+#### Proportions of car crashes vs. red or not red
+```{r red-crash-2,echo=F}
+prop.table(red_crash_table)
+```
+
+
+#### What percent of cars which did (or, didn't) crash were red?
+```{r red-crash-3,echo=F}
+prop.table(red_crash_table,1)
+```
+
+#### What percent of cars of each color (Red, non-Red) crashed?
+```{r red-crash-4,echo=F}
+prop.table(red_crash_table,2)
+```
+
+#### Perform a chi-sq test to determine whether there is a difference in proportions
+```{r red-crash-5,echo=F}
+summary(red_crash_table)
+```
+
+
+```{r plot-red-crash,echo=FALSE}
+myColors <- c("lightblue","pink")
+ggplot(dplyr::filter(train.df, TARGET_FLAG==1), 
+       aes(RED_CAR, fill = as.factor(RED_CAR))) +
+  geom_bar() +
+  scale_fill_manual(values=myColors) +
+  geom_text(stat='count', aes(label=..count..), vjust=1) +
+  labs(title="Bar Chart: Car Crash counts for Red and Non Red Cars", 
+       caption="Source: Car crash dataset") 
+```
+
+\newpage
+### **Women vs. Men**
+
+#### Let's check whether women are safer drivers compared to men:
+
+```{r prop-tables-MF-crash, echo=F}
+MF_crash_table <- table(train.df$TARGET_FLAG,train.df$SEX)
+rownames(MF_crash_table) <- c("No Crash","Crash")
+colnames(MF_crash_table) <- c("Male","Female")
+```
+
+#### Counts of car crashes vs. Male/Female
+```{r MF-crash-table, echo=F}
+MF_crash_table
+```
+
+#### Mosaicplot of car crashes vs. Male/Female
+```{r mosaic-plot-MF-crash, echo=F}
+mosaicplot(MF_crash_table, col=myColors)
+```
+
+
+#### Proportions of car crashes vs. Male/Female
+```{r MF-crash-2,echo=F}
+prop.table(MF_crash_table)
+```
+
+
+#### What percent of cars which did (or, didn't) crash were driven by Male vs. Female drivers?
+```{r MF-crash-3,echo=F}
+prop.table(MF_crash_table,1)
+```
+
+#### What percent of cars driven by Men crashed?  By Women?
+```{r MF-crash-4,echo=F}
+prop.table(MF_crash_table,2)
+```
+
+#### Perform a chi-sq test to determine whether there is a significant difference in proportions:
+```{r MF-crash-5,echo=F}
+summary(MF_crash_table)
+```
+
+
+
+```{r plot-MF-crash, echo=FALSE}
+
+ggplot(dplyr::filter(train.df, TARGET_FLAG==1), 
+       aes(SEX, fill = as.factor(SEX))) +
+  geom_bar() +
+  scale_fill_manual(values=myColors) +
+  labs(title="Bar Chart: Car Crash counts for Men vs. Women", 
+       caption="Source: Car crash dataset") 
+```
+
+#### While the above bar tables and chart show that women appear to have more car crashes compared to men, the $\chi^2$ test indicates that the data is not significantly different at 95% confidence.    
+##### Thus, we cannot reject the null hypothesis $H_0$: Men and women drivers experience accidents at the same frequency.
+
+\newpage
+
+# 2. Data Preparation
+
+#### **Encode Parent1 variable. No = 0 and Yes = 1**
+
+```{r}
+train.df$PARENT1 = ifelse(train.df$PARENT1 == 'No', 0, 1)
+train.df$PARENT1 = as.numeric(train.df$PARENT1)
+table(train.df$PARENT1)
+
+```
+
+#### **Encode MStatus variable. No = 0 and Yes = 1**
+
+```{r}
+train.df$MSTATUS = ifelse(train.df$MSTATUS == 'z_No', 0, 1)
+train.df$MSTATUS = as.numeric(train.df$MSTATUS)
+table(train.df$MSTATUS)
+
+```
+
+#### **Encode Sex variable. Male = 0 and Female = 1**
+
+```{r}
+train.df$SEX = ifelse(train.df$SEX == 'M', 0, 1)
+train.df$SEX = as.numeric(train.df$SEX)
+table(train.df$SEX)
+```
+
+#### **Encode Education variable.**
+
+```{r}
+train.df$EDUCATION = as.numeric(factor(train.df$EDUCATION, 
+                                       order = TRUE, 
+                                       levels = c("<High School", "z_High School", 
+                                                  "Bachelors", "Masters", "PhD")))
+table(train.df$EDUCATION)
+
+```
+
+#### **Encode Job variable.**
+
+```{r}
+train.df$JOB = as.numeric(factor(train.df$JOB, 
+                                 order = TRUE, 
+                                 levels = c("Student", "Home Maker", 
+                                            "z_Blue Collar", "Clerical", "Professional", 
+                                            'Manager', 'Lawyer', 'Doctor')))
+table(train.df$JOB)
+
+```
+
+#### **Encode Car_Use variable. Private = 0 and Commercial = 1**
+
+```{r}
+train.df$CAR_USE = ifelse(train.df$CAR_USE == "Private", 0, 1)
+train.df$CAR_USE  = as.numeric(train.df$CAR_USE)
+table(train.df$CAR_USE)
+
+```
+
+#### **Encode CAR_TYPE variable.**
+
+```{r}
+train.df$CAR_TYPE = as.numeric(factor(train.df$CAR_TYPE, 
+                                      order = TRUE, 
+                                      levels = c("Minivan", "z_SUV", "Van", 
+                                                 "Pickup", "Panel Truck", 'Sports Car')))
+table(train.df$CAR_TYPE)
+
+```
+
+#### **Encode Red_car variable. No = 0 and Yes = 1**
+
+```{r}
+train.df$RED_CAR = ifelse(train.df$RED_CAR == "no", 0, 1)
+train.df$RED_CAR  = as.numeric(train.df$RED_CAR)
+table(train.df$RED_CAR)
+
+```
+
+#### **Encode Revoked variable. No = 0 and Yes = 1**
+
+```{r}
+train.df$REVOKED = ifelse(train.df$REVOKED == "No", 0, 1)
+train.df$REVOKED  = as.numeric(train.df$REVOKED)
+table(train.df$REVOKED)
+```
+
+#### **Encode Urban city variable. Rural = 0 and Urban = 1**
+
+```{r}
+train.df$URBANICITY = ifelse(train.df$URBANICITY == "z_Highly Rural/ Rural", 0, 1)
+train.df$URBANICITY  = as.numeric(train.df$URBANICITY)
+table(train.df$URBANICITY)
+```
+
+#### **Convert Income, Home_val, BlueBook, oldClaim Variable to quantitative variable**
+
+```{r echo=FALSE}
+ConvertQuantitative = function(x)
+{
+  quan.cols =  
+  if(typeof(x) == "character")
+  {
+    x = gsub("\\$", "", x)
+    x = gsub("\\,", "", x)
+    x = as.numeric(x)
+  }
+  return(x)
+}
+
+train.df = apply(train.df[], 2, function(x) ConvertQuantitative(x)) %>%data.frame()
+
+```
+
+\newpage
+### **DATA IMPUTATION**
+
+#### Let's do data imputation for columns with missing values.
+
+#### Which columns have missing values, and what is a missing pattern?    
+#### Let's leverage VIM package to get this information:  
+
+```{r echo=FALSE}
+ggr_plot <- aggr(train.df, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(train.df), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+#AGE, YOJ, INCOME, HOME_VAL, JOB, CAR_AGE"
+```
+
+#### From the above missing values pattern, we can see that most of the observations do **not** have missing values.    
+#### Non-missing values are shown in blue. This is good news, thus we can assert good quality of the data.
+
+\newpage
+### Let's use the **mice** package to impute missing values
+
+#### **MICE**: "Multivariate Imputation by Chained Equations"
+
+The **mice** package implements a method to deal with missing data.    
+The package creates multiple imputations (replacement values) for multivariate missing data.    
+The method is based on Fully Conditional Specification, where each incomplete variable is imputed by a separate model.    
+The MICE algorithm can impute mixes of continuous, binary, unordered categorical and ordered categorical data.     
+In addition, MICE can impute continuous two-level data, and maintain consistency between imputations by means of passive imputation.    
+Many diagnostic plots are implemented to inspect the quality of the imputations.
+
+
+```{r echo=FALSE, output=FALSE}
+comp.data <- mice(train.df,m=2,maxit=10,meth='pmm',seed=500)
+train.df = complete(comp.data)
+```
+
+\newpage
+### **Check for correlated variables**
+
+#### The variables which are highly correlated carry similar information and can affect model accuracy. Highly correlated variables also impact estimation of model coefficients. Let's determine which variables in the training datasets are highly correlated to each other.
+
+```{r get-correlations, echo=T}
+  trainmatrix <- as.matrix(train.df)
+# The first column, "Index", is not useful, so drop it
+  trainmatrix <- trainmatrix[,-1]
+  res2<-rcorr(trainmatrix)
+  respearson=rcorr(trainmatrix,type = "pearson")
+  resspearman=rcorr(trainmatrix,type = "spearman")
+  res3 <- cor(trainmatrix)
+```
+
+```{r pearson-rank-correl, echo=FALSE, fig.width = 18, fig.height=18}
+  corrplot(corr = respearson$r, type = "upper", outline = T, order="hclust", 
+#### Pearson rank correlation
+           p.mat = respearson$P, sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nRank Correlation (Pearson)",
+           number.cex = 0.9, number.font = 2, number.digits = 2 )
+```
+
+
+```{r spearman-rank-correl, echo=FALSE, fig.width = 15, fig.height=15}
+#### Spearman rank correlation
+  corrplot(corr = resspearman$r, type = "upper", outline = T,  order="hclust", 
+           p.mat = resspearman$P, sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nRank Correlation (Spearman)",
+           number.cex = 0.9, number.font = 1, number.digits = 2)
+```
+
+
+
+#### From the above correlation graph we can see that target variable `TARGET_FLAG` is highly correlated with following variables
+
+* **REVOKED: License Revoked**
+* **MVR_PTS: Motor Vehicle Record Points**
+* **OLD_CLAIM: Total Claims**
+* **CLAIM_FREQ: Claim Frequency**
+* **URBANICITY: Home/Work Area**
+* **JOB: Job**
+* **INCOME: Income**
+* **HOME_VAL: Home Value**
+* **MSTATUS: Maritial Status**
+* **CAR_USE: Use of car**
+
+#### In addition to above variables, following variables are important for `TARGET_AMT` output variable
+
+* **BLUEBOOK: Value of vehicle**
+* **CAR_AGE: Age of car**
+* **CAR_TYPE: TType of car**
+
+
+### **Add interaction terms to our dataset**
+
+```{r interactions, echo=F}
+train.df$JOB_EDU =  round(log(train.df$JOB * train.df$EDUCATION))
+train.df$HOME_INCOME = log(1+ train.df$HOME_VAL) * log(1 + train.df$INCOME)
+train.df$MVR_PTS_Trans = round(log(1+ train.df$MVR_PTS))
+train.df$AGE_SEX =log(1 + train.df$AGE) * (1+train.df$SEX) 
+```
+
+
+# 3. Build Models - Logistic Regression
+
+```{r echo=FALSE}
+
+model.fit.evaluate <- function(model.formula, train.data, test.data) {
+  auclist = NULL
+  accuracylist = NULL
+  recalllist = NULL
+  precisionlist = NULL
+  k =1
+  set.seed(123)
+  
+  training <-train.data
+  testing.org<-test.data
+  
+  testing = testing.org[1:nrow(testing.org), names(testing.org)[names(testing.org) != 'target']]
+  
+  model <- glm(formula = model.formula,
+               family = "binomial", data = training)
+  predicted <- predict(model, newdata = testing,type="response")
+  pred <- prediction(predicted, testing.org$target)
+  ind = which.max(round(slot(pred, 'cutoffs')[[1]],1) == 0.5)
+  perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+  
+  auc.tmp <- performance(pred,"auc");
+  auc <- as.numeric(auc.tmp@y.values)
+  auclist[k] = auc
+  
+  acc.perf = performance(pred, measure = "acc")
+  acc = slot(acc.perf, "y.values")[[1]][ind]
+  accuracylist[k] = acc
+  
+  prec.perf = performance(pred, measure = "prec")
+  prec = slot(prec.perf, "y.values")[[1]][ind]
+  precisionlist[k] = prec
+  
+  recall.perf = performance(pred, measure = "tpr")
+  recall = slot(recall.perf, "y.values")[[1]][ind]
+  recalllist[k] = recall
+  
+    
+    
+  return(list("AUC" = mean(auclist), "Accuracy" = mean(accuracylist),  "Recall" = mean(recalllist), "Precision" = mean(precisionlist)))
+}
+
+df.metrix <<- NULL
+print.model.matrix = function(model.name, matrixobj)
+{
+  
+  print(paste("Printing Metrix for model: ", model.name))
+  for(i in 1 : length(matrixobj))
+  {
+    df = data.frame("Model" = model.name, "Metrix"=names(matrixobj)[[i]], "Value" = matrixobj[[i]])
+    df.metrix <<- rbind(df, df.metrix)
+    print(paste(names(matrixobj)[[i]], ":", matrixobj[[i]]))
+  }
+  
+}
+
+```
+
+
+### **Model fitting and evaluation**
+
+#### For model evaluation we will use train/test split technique. Since the goal of the exercise is to predict car crashes, we will build a **high recall model**
+
+### **High Recall Model**
+
+#### ***High recall model*** focuses on identifying the maximum possible positive instances. In this case it means we are optimizing our model to identify as many potential car crash targets as possible. Note that sometimes this can come at the cost of ***precision***, where we might get high number of false positives.
+
+### **Model Evaluation Metrics**
+
+#### Definitions:
+
+* **TP** : Stands for "True Positives"
+* **TN** : Stands for "True Negatives"
+* **FP** : Stands for "False Positives"
+* **FN** : Stands for "False Negatives"
+
+#### We will use following metrics for model evaluation and comparison:
+
+* **ROC AUC** : AUC - ROC curve is a performance measurement for the classification problem at various thresholds. ROC is a probability curve, and AUC ("Area Under the Curve") represents the degree or measure of separability.
+  - It tells how much the model is capable of distinguishing between classes.    
+  - The higher the AUC, the better the model.    
+
+* **Model Accuracy** : Accuracy is one metric for evaluating classification models. 
+  - Informally, accuracy is the ***fraction of predictions our model got right.***   
+  - Formally, accuracy has the following definition: $Accuracy = \frac{TP + TN}{TP + FP + TN + FN}$
+
+* **Model Recall** : Recall is a metric that focuses on ***how many true positives*** are identified from ***total positive observations*** in the data set. 
+  - False Negatives (FN) are positive observations which our model failed to identify, and reduce the recall.
+  - Formally, recall has following definition: $Recall = \frac{TP}{TP + FN}$ .
+
+* **Model Precision** : Precision is a metric that focuses on ***how many observations are truly positive*** out of the total number of cases which the model ***identified as positive***. 
+  - False Positives (FP) are negative observations which our model misidentified as positive, and reduce the precision.
+  - Formally, precision has following definition : $Precision = \frac{TP}{TP + FP}$.
+
+
+### Building the models
+
+#### Now that we are clear on our model fitting and evaluation method **(Train test split)** ,and also have model evaluation metrics **(Recall)** which we will use to compare the model effectiveness, we are all set to build different models and assess their performance.
+
+#### We will build three different models and compare them using above mentioned model metrics.
+
+#### 1. Let's build a model with important predictors, as per above analysis:
+
+* **REVOKED: License Revoked**
+* **MVR_PTS: Motor Vehicle Record Points**
+* **OLD_CLAIM: Total Claims**
+* **CLAIM_FREQ: Claim Frequency**
+* **URBANICITY: Home/Work Area**
+* **JOB: Job**
+* **INCOME: Income**
+* **HOME_VAL: Home Value**
+* **MSTATUS: Maritial Status**
+* **CAR_USE: Use of car**
+* **CAR_TYPE: Type of Car**
+
+```{r echo=FALSE}
+train.df.class = train.df[, !names(train.df)%in%c('INDEX', 'TARGET_AMT')]
+train.df.class = dplyr::rename(train.df.class, target = TARGET_FLAG)
+
+dt = sort(sample(nrow(train.df.class), nrow(train.df.class)*.7))
+
+train.data = train.df.class[dt,]
+test.data = train.df.class[-dt,]
+
+```
+
+### **1. Model with selected important variables**
+
+
+```{r echo=TRUE}
+model.metrix = model.fit.evaluate("target ~ INCOME + HOME_VAL + MSTATUS  + JOB + CAR_USE + CAR_TYPE + OLDCLAIM + CLM_FREQ + REVOKED + MVR_PTS + URBANICITY", train.data, test.data)
+print.model.matrix("Base Model", model.metrix)
+
+```
+
+
+
+### **2. Model with all the predictors, plus transformed variables**
+
+#### We will add new variables to the model
+
+```{r echo=TRUE}
+model.metrix = model.fit.evaluate("target ~ KIDSDRIV + AGE + HOMEKIDS + YOJ + INCOME + PARENT1 + HOME_VAL + MSTATUS+ SEX + EDUCATION + JOB + TRAVTIME + CAR_USE + BLUEBOOK  + TIF + CAR_TYPE + RED_CAR + OLDCLAIM + CLM_FREQ + REVOKED + MVR_PTS + CAR_AGE + URBANICITY + JOB_EDU + MVR_PTS_Trans + HOME_INCOME + AGE_SEX", train.data, test.data)
+print.model.matrix("Interaction Term", model.metrix)
+
+```
+
+### **3. Model with balanced training set**
+
+#### Since we know that data is class-imbalanced, we will use **ROSE** package and leverage synthetic data generation technique to balance the training data.
+
+
+```{r echo=TRUE}
+train.data.balanced <- ROSE(target ~ ., data = train.data, seed = 1)$data
+model.metrix = model.fit.evaluate("target ~ KIDSDRIV + AGE + HOMEKIDS + YOJ + INCOME + PARENT1 + HOME_VAL + MSTATUS+ SEX + EDUCATION + JOB + TRAVTIME + CAR_USE + BLUEBOOK  + TIF + CAR_TYPE + RED_CAR + OLDCLAIM + CLM_FREQ + REVOKED + MVR_PTS + CAR_AGE + URBANICITY + JOB_EDU + MVR_PTS_Trans + HOME_INCOME + AGE_SEX", train.data.balanced, test.data)
+print.model.matrix("Class Balanced", model.metrix)
+
+```
+
+
+#### From the above results we can see that model which uses all the variables along with newly added interaction term and which has class balance data performs better. We will use this model for prediction.
+
+### **4. Model coefficient analysis**
+
+```{r}
+fit = glm(formula = "target ~ KIDSDRIV + AGE + HOMEKIDS + YOJ + INCOME + PARENT1 + HOME_VAL + MSTATUS+ SEX + EDUCATION + JOB + TRAVTIME + CAR_USE + BLUEBOOK  + TIF + CAR_TYPE + RED_CAR + OLDCLAIM + CLM_FREQ + REVOKED + MVR_PTS + CAR_AGE + URBANICITY + JOB_EDU + MVR_PTS_Trans + HOME_INCOME + AGE_SEX", data = train.df.class)
+
+summary(fit)
+```
+
+#### **The following conclusions can be drawn from model coefficients**
+
+* **KidsDriv: As number of kids driver increses log odds of car crash also increases**
+* **Age: Not very significant in predicting car crash**
+* **HomeKids: Not very significant in predicting car crash**
+* **YOJ: Not very significant in predicting car crash**
+* **Income: As Income increases log odds of car crash decreases**
+* **Home_Val: Not very important for predicting car crash**
+* **MStatus: If you are married, it decreases the log odds of car crash**
+* **Education: As education increases log odds of car crash decreases**
+* **Jobs: Higher the job level less likely the log odds of car crash**
+* **Travtime: Longer the travel time increases the log odds of car crash**
+* **Car Use: Commercial cars have more risk compared to private cars**
+* **BlueBook: As the cost of cars increases log odds of car crash decreases**
+* **TIF: Longer the people are in force less risky it becomes**
+* **Red_Car: As expected a car being red doesn't contribute to car crash**
+* **Clm_Freq, Revoked and Mvr_Pts: As expected all these variables increases the risk of car crash**
+* **Urbanicity : Interestigly Work area is more prone to car crashes than home area**
+
+#### From the above analysis it is demonstrated that model-3, which uses all the variables along with newly added interaction term and which has class-balanced data, performs better. We will use this model for prediction. The below bar chart shows different models and helps us to compare them on the basis of model metrics.
+
+```{r echo=FALSE}
+ggplot(df.metrix, aes(x = Model, y=Value, fill=Metrix)) +
+  geom_bar(stat='identity', position=position_dodge()) +
+  labs(title="Bar Chart : Model performance evaluation", 
+            caption="Source: Crime Rate dataset of a major city") +
+  coord_flip()
+
+```
+
+# 4. Build Models - Multiple Linear Regression
+
+#### For Linear regression model we will use the **cross validation** technique. We will use **Root Mean Square Error  (RMSE) ** as a model evaluation metric. The model with the lower RMSE will be the best model.
+
+$RMSE = \sqrt{\sum{[ActualValue - PredictedValue]}^2}$
+
+```{r echo = FALSE}
+
+lm.cv = function(form,input.data)
+{
+  out <- CVlm(data = input.data, form.lm = formula(form),m=2,plotit= "Residual", printit = FALSE)
+  cv.rmse <- sqrt(attr(out,"ms"))
+  return(list('output' = out))
+}
+print.rmse = function(output.df)
+{
+  rss = sum((output.df$target - output.df$Predicted)^2)
+  print(paste('Root Mean Square = ', sqrt(rss)))
+}
+```
+
+```{r echo = FALSE}
+train.df.reg = train.df[, !names(train.df)%in%c('INDEX', 'TARGET_FLAG')]
+train.df.reg = dplyr::rename(train.df.reg, target = TARGET_AMT) %>% dplyr::filter(target != 0 )
+```
+### **1. Model with selected important variables**
+
+```{r echo=TRUE}
+model.metrix = lm.cv("target ~ INCOME + HOME_VAL + MSTATUS  + JOB + CAR_USE + CAR_TYPE + OLDCLAIM + CLM_FREQ + REVOKED + MVR_PTS + URBANICITY + BLUEBOOK + CAR_AGE", train.df.reg)
+print.rmse(model.metrix$output)
+
+```
+
+#### From the above residual plot we can see that residuals are y-axis imbalanced and heterogeneous.
+
+### **2. Model with BoxCox transformation along with logarithmic transformation of output variable.** 
+#### We are also selecting fewer variables, as per important regression coefficients.
+
+```{r echo = TRUE}
+bc <- boxcox(train.df.reg$BLUEBOOK ~ log(train.df.reg$target))
+lambda <- bc$x[which.max(bc$y)]
+
+train.df.reg$target_TRAN = log(train.df.reg$target)
+train.df.reg$BLUEBOOK_TRAN = (train.df.reg$BLUEBOOK^lambda -1)/lambda
+
+model.metrix = lm.cv("target_TRAN ~ BLUEBOOK_TRAN + MVR_PTS + CAR_AGE + CAR_TYPE", train.df.reg)
+model.metrix$output$Predicted = exp(model.metrix$output$Predicted)
+print.rmse(model.metrix$output)
+```
+
+#### The above residual plot looks better. It is balanced on both axes and homogeneous.
+
+#### We can see that model with the Box-Cox transformation along with target variable logarithmic transformation gives us higher RMSE compared to the model with important variables. However, the difference in RMSE is not that big and in general it is always best practice to select the model with fewer variables to avoid overfitting. For this reason we will choose the second model (Model with Box-Cox transformation with fewer variables) for prediction.
+
+### **3. Regression model coefficient analysis**
+
+```{r}
+fit = lm(target_TRAN ~ BLUEBOOK_TRAN + MVR_PTS + CAR_AGE + CAR_TYPE + REVOKED + SEX, train.df.reg)
+summary(fit)
+```
+
+#### Interestingly, we can see that **only two variables are statistically significant** and contributing towards target amount prediction:
+
+* **BLUEBOOK** : Value of car is very important factor in determining claim amount. This perfectly makes sense.
+* **MVR_PTS** : Number of traffic tickets is next important variable. Note that coefficient is positive which indicates pay-out amount increases with the number of ticket violations. This makes sense because it indicates that the more traffic violations, the more careless the driver, which translates to a higher risk of expensive accidents, thus the higher insurance payout. We will use this model since this is giving us lower RMSE indicating better model fit.
+
+
+### **3. Regression model residiual analysis**
+
+```{r}
+qqnorm(fit$residuals)
+```
+
+#### From the residual normality plots we can see that residuals are normally distributed. This satisfies the normality assumption of residuals for multiple regression model.
+
+# 5. Select Models
+
+### **1. Read evaluation data and clean. Create required interaction terms**
+
+```{r echo=FALSE}
+testing = read.csv("./Data/insurance-evaluation-data.csv", stringsAsFactors = FALSE, na.strings=c("NA","NaN", " ", ""))
+
+testing$PARENT1 = ifelse(testing$PARENT1 == 'No', 0, 1)
+testing$PARENT1 = as.numeric(testing$PARENT1)
+testing$MSTATUS = ifelse(testing$MSTATUS == 'z_No', 0, 1)
+testing$MSTATUS = as.numeric(testing$MSTATUS)
+testing$SEX = ifelse(testing$SEX == 'M', 0, 1)
+testing$SEX = as.numeric(testing$SEX)
+testing$EDUCATION = as.numeric(factor(testing$EDUCATION, order = TRUE, levels = c("<High School", "z_High School", "Bachelors", "Masters", "PhD")))
+testing$JOB = as.numeric(factor(testing$JOB, order = TRUE, levels = c("Student", "Home Maker", "z_Blue Collar", "Clerical", "Professional", 'Manager', 'Lawyer', 'Doctor')))
+testing$CAR_USE = ifelse(testing$CAR_USE == "Private", 0, 1)
+testing$CAR_USE  = as.numeric(testing$CAR_USE)
+testing$CAR_TYPE = as.numeric(factor(testing$CAR_TYPE, order = TRUE, levels = c("Minivan", "z_SUV", "Van", "Pickup", "Panel Truck", 'Sports Car')))
+testing$RED_CAR = ifelse(testing$RED_CAR == "no", 0, 1)
+testing$RED_CAR  = as.numeric(testing$RED_CAR)
+testing$REVOKED = ifelse(testing$REVOKED == "No", 0, 1)
+testing$REVOKED  = as.numeric(testing$REVOKED)
+testing$URBANICITY = ifelse(testing$URBANICITY == "z_Highly Rural/ Rural", 0, 1)
+testing$URBANICITY  = as.numeric(testing$URBANICITY)
+
+testing = apply(testing[], 2, function(x) ConvertQuantitative(x)) %>%data.frame()
+comp.data <- mice(testing,m=2,maxit=10,meth='pmm',seed=500)
+testing = complete(comp.data)
+testing = testing[, !names(testing) %in% c('Index', 'TARGET_FLAG', 'TARGET_AMT')]
+
+testing$JOB_EDU =  round(log(testing$JOB * testing$EDUCATION))
+testing$HOME_INCOME = log(1+ testing$HOME_VAL) * log(1 + testing$INCOME)
+testing$MVR_PTS_Trans = round(log(1+ testing$MVR_PTS))
+testing$AGE_SEX =log(1 + testing$AGE) * (1+testing$SEX) 
+testing$BLUEBOOK_TRAN = (testing$BLUEBOOK^lambda -1)/lambda
+
+```
+
+### **Logistic Regression**
+
+#### For Logistic regression we will use Model-3, which uses the balanced dataset using Synthetic Data Generation technique (SMOTE) and also leverages other variables to determine risk of car crashes.
+
+```{r}
+model.formula = "target ~ KIDSDRIV + AGE + HOMEKIDS + YOJ + INCOME + PARENT1 + HOME_VAL + MSTATUS+ SEX + EDUCATION + JOB + TRAVTIME + CAR_USE + BLUEBOOK  + TIF + CAR_TYPE + RED_CAR + OLDCLAIM + CLM_FREQ + REVOKED + MVR_PTS + CAR_AGE + URBANICITY + JOB_EDU + MVR_PTS_Trans + HOME_INCOME + AGE_SEX"
+
+
+model <- glm(formula = model.formula, family = "binomial", data = train.data.balanced)
+
+
+
+predicted <- predict(model, newdata = testing,type="response")
+lables = ifelse(predicted > 0.5, 1, 0)
+
+testing$TARGET_FLAG_Proba = round(predicted,1)
+testing$TARGET_FLAG = lables
+testing = data.frame(testing)
+#write.table(testing, "./Data/PredictedOutcome.csv", row.names = FALSE, sep=",")
+```
+
+### **Multiple Linear Regression**
+
+#### For multiple linear regression we will use the second model, which uses Box-Cox transformation and fewer variables. Even though RMSE is lower, we are sticking to this model due to fewer variables and improved explainability.
+
+```{r}
+model.formula = "target_TRAN ~ BLUEBOOK_TRAN + MVR_PTS + CAR_AGE + CAR_TYPE"
+
+
+model <- lm(formula = model.formula,  data = train.df.reg)
+
+
+
+predicted <- predict(model, newdata = testing)
+testing$TARGET_AMT = testing$TARGET_FLAG * exp(predicted)
+testing = data.frame(testing)
+write.table(testing, "./Data/PredictedOutcome.csv", row.names = FALSE, sep=",")
+```
+
+
+# 6. Appendix
+
+#### **Train Test Split Validation Code**
+
+```{r echo=TRUE}
+
+model.fit.evaluate <- function(model.formula, train.data, test.data) {
+  auclist = NULL
+  accuracylist = NULL
+  recalllist = NULL
+  precisionlist = NULL
+  k =1
+  set.seed(123)
+  
+  training <-train.data
+  testing.org<-test.data
+  
+  testing = testing.org[1:nrow(testing.org), names(testing.org)[names(testing.org) != 'target']]
+  
+  model <- glm(formula = model.formula,
+               family = "binomial", data = training)
+  predicted <- predict(model, newdata = testing,type="response")
+  pred <- prediction(predicted, testing.org$target)
+  ind = which.max(round(slot(pred, 'cutoffs')[[1]],1) == 0.5)
+  perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+  
+  auc.tmp <- performance(pred,"auc");
+  auc <- as.numeric(auc.tmp@y.values)
+  auclist[k] = auc
+  
+  acc.perf = performance(pred, measure = "acc")
+  acc = slot(acc.perf, "y.values")[[1]][ind]
+  accuracylist[k] = acc
+  
+  prec.perf = performance(pred, measure = "prec")
+  prec = slot(prec.perf, "y.values")[[1]][ind]
+  precisionlist[k] = prec
+  
+  recall.perf = performance(pred, measure = "tpr")
+  recall = slot(recall.perf, "y.values")[[1]][ind]
+  recalllist[k] = recall
+  
+    
+    
+  return(list("AUC" = mean(auclist), "Accuracy" = mean(accuracylist),  "Recall" = mean(recalllist), "Precision" = mean(precisionlist)))
+}
+
+df.metrix <<- NULL
+print.model.matrix = function(model.name, matrixobj)
+{
+  
+  print(paste("Printing Metrix for model: ", model.name))
+  for(i in 1 : length(matrixobj))
+  {
+    df = data.frame("Model" = model.name, "Metrix"=names(matrixobj)[[i]], "Value" = matrixobj[[i]])
+    df.metrix <<- rbind(df, df.metrix)
+    print(paste(names(matrixobj)[[i]], ":", matrixobj[[i]]))
+  }
+  
+}
+
+```
+
+#### **Linear Regression Cross Validation Code**
+
+```{r echo = TRUE}
+
+lm.cv = function(form,input.data)
+{
+  out <- CVlm(data = input.data, form.lm = formula(form),m=2,plotit= "Residual", printit = FALSE)
+  cv.rmse <- sqrt(attr(out,"ms"))
+  return(list('output' = out))
+}
+print.rmse = function(output.df)
+{
+  rss = sum((output.df$target - output.df$Predicted)^2)
+  print(paste('Root Mean Square = ', sqrt(rss)))
+}
+```
+
+#### **Evaluation data cleanup code**
+
+```{r echo=TRUE}
+testing = read.csv("./Data/insurance-evaluation-data.csv", stringsAsFactors = FALSE, na.strings=c("NA","NaN", " ", ""))
+
+testing$PARENT1 = ifelse(testing$PARENT1 == 'No', 0, 1)
+testing$PARENT1 = as.numeric(testing$PARENT1)
+testing$MSTATUS = ifelse(testing$MSTATUS == 'z_No', 0, 1)
+testing$MSTATUS = as.numeric(testing$MSTATUS)
+testing$SEX = ifelse(testing$SEX == 'M', 0, 1)
+testing$SEX = as.numeric(testing$SEX)
+testing$EDUCATION = as.numeric(factor(testing$EDUCATION, order = TRUE, levels = c("<High School", "z_High School", "Bachelors", "Masters", "PhD")))
+testing$JOB = as.numeric(factor(testing$JOB, order = TRUE, levels = c("Student", "Home Maker", "z_Blue Collar", "Clerical", "Professional", 'Manager', 'Lawyer', 'Doctor')))
+testing$CAR_USE = ifelse(testing$CAR_USE == "Private", 0, 1)
+testing$CAR_USE  = as.numeric(testing$CAR_USE)
+testing$CAR_TYPE = as.numeric(factor(testing$CAR_TYPE, order = TRUE, levels = c("Minivan", "z_SUV", "Van", "Pickup", "Panel Truck", 'Sports Car')))
+testing$RED_CAR = ifelse(testing$RED_CAR == "no", 0, 1)
+testing$RED_CAR  = as.numeric(testing$RED_CAR)
+testing$REVOKED = ifelse(testing$REVOKED == "No", 0, 1)
+testing$REVOKED  = as.numeric(testing$REVOKED)
+testing$URBANICITY = ifelse(testing$URBANICITY == "z_Highly Rural/ Rural", 0, 1)
+testing$URBANICITY  = as.numeric(testing$URBANICITY)
+
+testing = apply(testing[], 2, function(x) ConvertQuantitative(x)) %>%data.frame()
+comp.data <- mice(testing,m=2,maxit=10,meth='pmm',seed=500)
+testing = complete(comp.data)
+testing = testing[, !names(testing) %in% c('Index', 'TARGET_FLAG', 'TARGET_AMT')]
+
+testing$JOB_EDU =  round(log(testing$JOB * testing$EDUCATION))
+testing$HOME_INCOME = log(1+ testing$HOME_VAL) * log(1 + testing$INCOME)
+testing$MVR_PTS_Trans = round(log(1+ testing$MVR_PTS))
+testing$AGE_SEX =log(1 + testing$AGE) * (1+testing$SEX) 
+testing$BLUEBOOK_TRAN = (testing$BLUEBOOK^lambda -1)/lambda
+
+```
+
