@@ -1,0 +1,442 @@
+---
+title: "Poisson Regression. Negative Binomial Regression. Multinomial Logistic Regression. Zero Inflated Poisson and Negative Binomial Regression"
+author:
+- Sachid Deshmukh
+- Michael Yampol
+- Vishal Arora
+- Ann Liu-Ferrara
+date: "Dec. 05, 2019"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+  pdf_document:
+    number_sections: no
+    toc: yes
+    toc_depth: 2
+subtitle: 'Data 621: Homework 5 - Group 4'
+---
+
+\newpage
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(Hmisc)
+library(ROCR)
+library(parallel)
+library(Boruta)
+library(VIM)
+library(mice)
+library(knitr)
+library(ROSE)
+library(DAAG)
+library(MASS)
+library(nnet)
+library(pscl)
+library(AER)
+library(arm)
+opts_knit$set(root.dir = "D:/MSDS/Data621_Group4/HW-5/")
+
+```
+
+```{r echo=FALSE}
+# Set working directory and load the training data
+train.df = read.csv("./Data/wine-training-data.csv", stringsAsFactors = FALSE, na.strings=c("NA","NaN", " ", ""))
+```
+
+# 1. Data Exploration
+
+### **Let's load training dataset and preview.**
+
+```{r echo=FALSE}
+head(train.df)
+print(paste("Number of columns = ", ncol(train.df)))
+print(paste("Number of rows = ", nrow(train.df)))
+```
+
+#### As we can see in the preview, training data has 16 columns and 12795 rows
+
+### **Let's analyze datatypes of each column.**
+
+```{r echo=FALSE}
+str(train.df)
+
+```
+
+#### All the columns are either Integer or numeric types. Please note that Integer columns in the above dataset are excellent candidate for creating categorical variables which can further enhance quality of our models
+
+### **Let's check if any variables have missing values. Values which are NULL or NA.**
+
+#### **Check missing values**
+
+```{r echo =FALSE}
+miss.cols = apply(train.df, 2, function(x) any(is.na(x)))
+print(paste("Number of columns with missing values = ", length(names(miss.cols[miss.cols==TRUE]))))
+print(paste("Names of columns with missing values = ", paste(names(miss.cols[miss.cols==TRUE]), collapse = ', ')))
+      
+```
+
+#### We can see 8 variables namely ResidualSugar, Chlorides, FreeSulfurDioxide, TotalSulfurDioxide, pH, Sulphates, Alcohol and STARS have missing values. We will impute values for these variables for better model accuracy.
+
+### **Let's see distribution of Target variable**
+
+```{r}
+hist(train.df$TARGET)
+```
+
+#### From the above histogram we can see that distribution of target variable is not exactly Poisson distribution. We can see high number of observations with zeros. Then there is another peak around 4 and then it decreases towards right. Ditribution also shows skew in the right hand side where there are very few observations as sample count increases. This dataset is a very good candidate for zero inflated Poisson/Negative bionomial regression since we can see the number of observations with zero count is more.
+
+# 2. Data Preparation
+
+#### **Remove Index column since it is just and indentifier and won't contribute towards predictive capability of the mdel**
+
+```{r}
+train.df = train.df[1:nrow(train.df), 2:ncol(train.df)]
+```
+
+### **Let's do data imputation for missing columns**
+
+#### Which columns are mssing and what is a missing pattern. Let's leverage VIM package to get this information
+
+```{r echo=FALSE}
+ggr_plot <- aggr(train.df, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(train.df), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+#AGE, YOJ, INCOME, HOME_VAL, JOB, CAR_AGE"
+```
+
+#### From the above missing values pattern we can see that variable Stars have the highest proportion of missing values. Around 25% of the obsertvations are missing value Stars. This might also indicate wine with 0 Star ratings. All other variables have very low proportion of missing observation. This is a good news since this asserts good quality of input data.
+
+### **Let's use MICE package to imput missing values**
+
+```{r echo=FALSE, output=FALSE}
+comp.data <- mice(train.df,m=2,maxit=10,meth='pmm',seed=500)
+train.df = complete(comp.data)
+```
+
+### **The variables which are highly correlated carry similar information and can affect model accuracy. Highly correlated variables also impacts estimation of model coefficients. Let's figure out which variables in the training datasets are highly correlated to each other**
+
+```{r echo=FALSE}
+  res2<-rcorr(as.matrix(train.df))
+
+  corrplot::corrplot(res2$r, type="upper", order="hclust", 
+         p.mat = res2$P, sig.level = 0.05, insig = "blank")
+```
+
+#### From the above correlation graph we can see that target variable TARGET is highly correlated with following variables
+
+* **Label Appeal**
+* **Stars**
+* **Acid Index**
+* **Fixed Acidity**
+
+### **Feature Transformations**
+
+#### See relationshipt between STARS and Target variable. Transform STARS Variable
+
+```{r}
+
+ggplot(train.df, aes(x= STARS, y = TARGET)) +
+  geom_point(aes(colour = factor(TARGET)))
+
+train.df$StarTran = ifelse(train.df$STARS == 1, 2, train.df$STARS)
+```
+
+#### See relationshipt between AcidIndex and Target variable. Transform AcidIndex variable
+
+```{r}
+ggplot(train.df, aes(x= AcidIndex, y = TARGET)) +
+  geom_point(aes(colour = factor(TARGET)))
+
+train.df$AcidIndexTran = ifelse(train.df$AcidIndex <=6,  0, train.df$AcidIndex)
+train.df$AcidIndexTran = ifelse((train.df$AcidIndexTran > 6 & train.df$AcidIndexTran < 12),  1, train.df$AcidIndexTran)
+train.df$AcidIndexTran = ifelse(train.df$AcidIndexTran >= 12 ,  2, train.df$AcidIndexTran)
+```
+
+#### See relationship between LabelAppeal and target variable. Transform LabelAppeal Variable
+
+```{r}
+ggplot(train.df, aes(x= LabelAppeal, y = TARGET)) +
+  geom_point(aes(colour = factor(TARGET)))
+
+train.df$LabelAppealTran = ifelse(train.df$LabelAppeal <0,  0, train.df$LabelAppeal)
+```
+
+
+# 3. Build Models
+
+```{r echo=FALSE}
+
+model.fit.evaluate.mcr <- function(model, test.data, test.values) {
+ output = predict(model, test.data)
+ mat = table(output, test.values)
+ mcr = sum(diag(mat))/sum(mat)
+ return(mcr)
+}
+
+model.fit.evaluate.rmse <- function(model, test.data, test.values) {
+  output = predict(model, test.data)
+  output = round(output)
+  rmse = (sum((output - test.values)^2)) ^ 0.5
+}
+
+```
+
+
+### **Model fitting and evaluation**
+
+### **For model evaluation we will use train test split technique. We will use 70% data to train the model and leverage remaining 30% to test the model**
+
+### **Model Evaluation Metrics**
+
+#### We will use following metrics for model evaluation and comparison
+
+* **RMSE** : We wll use Root Mean Square error to evaluate Poisson and Negative binomial model. Root mean square indicates the quality of model fit. Lesser RMSE indicates better model fit and higher RMSE indicates poor model fit. RMSE can be calcualted as (sum(y-y')^2)^0.5
+
+**Where**
+
+* **y** : Actual value
+* **y'** : Predicted value
+
+* **Model Accuracy** : For multinomial model we will use accuracy as model evaluation metric. Informally, accuracy is the fraction of predictions our model got right. Formally, accuracy has the following definition: Accuracy = (TP + TN)/(TP + FP + TN + FN)
+
+**Where**
+
+* **TP** : Stands for True Positives
+* **TN** : Stands for True Negatives
+* **FP** : Stands for False Positives
+* **FN** : Stands for False Negatives
+
+### **Now we are clear on our model fitting and evaluation method (Train test split) and also have model evaluation metrics (RMSE and Accuracy) which we will use to compare the model effectiveness we are all set to build different models and access it's performance**
+
+### **1. Split training data into train and test**
+
+
+```{r echo=TRUE}
+train.df.class = dplyr::rename(train.df, target = TARGET)
+dt = sort(sample(nrow(train.df.class), nrow(train.df.class)*.7))
+train.data = train.df.class[dt,]
+test.data = train.df.class[-dt,]
+test.values = test.data$target
+test.data = test.data[1:nrow(test.data), names(test.data)[names(test.data)!= 'target']]
+
+```
+
+### **2. Poisson regression model with all variables**
+
+
+```{r echo=TRUE}
+model.poss.all = glm(target~  ., family=poisson, data=train.data)
+summary(model.poss.all)
+rmse.poss.all = model.fit.evaluate.rmse(model.poss.all, test.data, test.values)
+print(rmse.poss.all)
+
+```
+
+### **2. Poisson regression model with selected variables**
+
+
+```{r echo=TRUE}
+model.poss.sel = glm(target~  LabelAppeal + STARS + AcidIndex + FixedAcidity, family=poisson, data=train.data)
+summary(model.poss.sel)
+rmse.poss.sel = model.fit.evaluate.rmse(model.poss.sel, test.data, test.values)
+print(rmse.poss.sel)
+
+```
+
+#### From the RMSE analysis of Poisson Regression model with all variables and Poisson regression model with selected variables, we can see that even though the RMSE of Poisson regression model with all variable is lesser, there is not much difference. Going forward we will stick to model with selected variables. This is done to maintain model simplicity and to make model more interpretable by removing many correlated variables.
+
+### **3. Model Dispersion test**
+
+```{r}
+dispersiontest(model.poss.sel)
+```
+
+#### The model dispersion test is 0.89. This indicates under dispersion. For Poisson assuption to hold true we need mean and variance of the target variable same. If mean is greater than variance it results into over dispersion. if mean is lesser than variance it results in under dispersion. 
+
+#### For Poisson model violation of above assumption (Mean = Var) will result into inaccurate calculation of standard errors for model coefficients. The magnitude of model coefficients will be same however inaccurate standard errors will result in to inaccurate calucation of confidence interval of the model coefficients and will in turn result into inaccurate inference.
+
+#### Negative binomial regression is well suited for overdispersion. For underdispersion, Negative binomial regression is not reccomend. However let's try negative Binomial Regression on the above dataset and compare the model paramters
+
+### **4. Negative Binomial Regression**
+
+```{r}
+negbio = glm.nb(target~  LabelAppeal + STARS + AcidIndex + FixedAcidity, data=train.data)
+summary(negbio)
+rmse.nb = model.fit.evaluate.rmse(negbio, test.data, test.values)
+print(rmse.nb)
+```
+
+
+### **5. Robust Poisson regression model**
+
+#### In general it is a good idea to fit robust Poisson regression model to get accurate estimation for Std Errors. Since dataset indicates under dispersion it is a good idea to fit robust Poisson regression model and check if we see any difference in the std error estimation for model regression coefficients
+
+```{r}
+model.poss.sel.robust = glm(target~  LabelAppeal + STARS + AcidIndex + FixedAcidity, family=quasipoisson, data=train.data)
+summary(model.poss.sel.robust)
+rmse.poss.sel.robust = model.fit.evaluate.rmse(model.poss.sel.robust, test.data, test.values)
+print(rmse.poss.sel.robust)
+```
+
+### **5. Compare Negative Binomial, Poisson Regression and Robust Poisson regression models Coefficients and Std Errors**
+
+```{r}
+pos.coef = coef(model.poss.sel)
+negbinom.coef = coef(negbio)
+pos.stderr = se.coef(model.poss.sel)
+negbinom.stderr = summary(negbio)$coefficients[, 2]
+pos.robust.coef = coef(model.poss.sel.robust)
+pos.robust.stderr = se.coef(model.poss.sel.robust)
+df.analysis = cbind(pos.coef, negbinom.coef, pos.stderr, negbinom.stderr,pos.robust.coef, pos.robust.stderr)
+head(df.analysis,10)
+```
+
+#### From the above table we can see that both model coefficient and std errors for Poisson and Negative Binomial regression model are same. This can be due to the fact that under-dispersion in the dataset is not that severe to impact the accuracy of Poisson regression model
+
+#### From the above table we can see that model coefficients for Poisson Regression and Robust Poisson Regression models are same, however the estimates for Std Errors are different for them. This is expected since dataset has under dispersion. Std Errors estimations for regression coefficient of Poisson regression model will not be accurate. We need to rely on Std Error estimation for Robust Poisson regression model which is more suited for datasets exhibiting under dispersion or over dispersion. If we need to use these coefficients for inference it is better to rely on Std Error estimated of Robust Poisson regression model to calcualte confidence interval rather than normal Poisson regression modle for increasing accuracy of inference
+
+### **6. Fit zero inflated Poisson Regression model**
+
+```{r}
+model.poss.zip= zeroinfl(target~  LabelAppeal + STARS + AcidIndex + FixedAcidity|STARS, dist='poisson', data=train.data)
+summary(model.poss.zip)
+rmse.poss.zip = model.fit.evaluate.rmse(model.poss.zip, test.data, test.values)
+print(rmse.poss.zip)
+```
+
+#### We can see that Zero inflated Poisson regression model has greately improved the RMSE and indicates better fit for the model. This is due to the fact that dataset has unusually higher number of samples with zeros. This make this dataset better fit for Zero Inflated Poisson regression model. Note that we need to specify parameter for Zero Inflated Poisson regression model indicating what feature can contribute to more occurence of records with zero target variable. Obvious choice here is STARS variable. It is intuitive to think that if the number of STARS are more it will contribute to increased count of wine sample purchase. We have fitted our model indicating STARS as the parameter which impact number of records with zero target variable and we can see that it is resulting into lesser RMSE indicating better model fit compare to regular Poisson regression model.
+
+
+### **7. Fit zero inflated Negative Binomial Regression model**
+
+```{r}
+model.nb.zip= hurdle(target~  LabelAppeal + STARS + AcidIndex + FixedAcidity|STARS, dist='negbin', data=train.data)
+summary(model.nb.zip)
+rmse.nb.zip = model.fit.evaluate.rmse(model.nb.zip, test.data, test.values)
+print(rmse.nb.zip)
+```
+
+#### We can see that Zero Inflated Poisson regression model has lower RMSE compared to Zero Inflated Negative Binomial model. This is due to the fact that dataset has under dispersion and Negative Binomial model is not reccomended when there is under dispersion in the dataset.
+
+### **8. Fit Multinomial Logistic Regression model with selected variables**
+
+#### Since this is a Multinomial Regression model, we will use Accuracy as a model evaluation metric as stated in the model evaluation criteria above
+
+```{r}
+train.data.class = train.data
+train.data.class$target = factor(train.data.class$target)
+model.multi= multinom(target~  LabelAppeal + STARS + AcidIndex + FixedAcidity,  data=train.data.class)
+summary(model.multi)
+accuracy.multi = model.fit.evaluate.mcr(model.multi, test.data, test.values)
+print(accuracy.multi)
+```
+
+
+#### From the above Accuracy metric we can say that with the Accuracy score of 0.44 we can predict wine sample purchase count with 44% accuracy. This is not a great accuracy score. This is expected since Multinomial regression model is not relevant for this problem statement. Multinomial regression model can be used to predict un-ordered target class with multiple values. However in this problem statement we are dealing with target variable which is wine sample purchase count. The target variable is ordered here and that makes Poisson regression model more applicable here compare to Multinomial Logistic Regression model
+
+### **9. Fit multiple linear regression model with all the variables**
+
+```{r}
+model.multilr= lm(target~  .,  data=train.data)
+summary(model.multilr)
+rmse.multilr = model.fit.evaluate.rmse(model.multilr, test.data, test.values)
+print(rmse.multilr)
+```
+
+### **10. Fit multiple linear regression model with selected variables and cubic transformation of Stars variable**
+
+```{r}
+model.multilr.sel= lm(target~  LabelAppeal + poly(STARS,3) + AcidIndex + FixedAcidity,  data=train.data)
+summary(model.multilr.sel)
+rmse.multilr.sel = model.fit.evaluate.rmse(model.multilr.sel, test.data, test.values)
+print(rmse.multilr.sel)
+```
+
+
+#### Interestingly we are getting similar (close enough) RMSE between Zero Inflated Possion Regression model and Multiple Linear regression model with selected transformed Stars variable. This is possible here because distribution of target variable was not strictly Poisson. The distribution looked more kind of bimodal with skew on the right side. We can say that both Zero inflated Poisson regression model perform as good as multiple linear regression model with quadratic term of Stars variable.
+
+### **Model Selection**
+
+#### From the above model fit we can conclude following
+
+* **For Inference we can select Robust Poisson Regression model. We are selecting this model for inference even though it doesn't have great RMSE. We are doing this because Robust Poisson regression model is interpretable comapred to zero inflated Poisson regression model and std error estimation is more robust for Robust Poisson regression model. This is more important here becuase dataset have under dispersion and we need to stick to Robust Poisson regression model for inference rather that simple Poisson regressio model**
+
+* **For prediction we can select Zero Inflated Poisson Regression model. We are selecting this model because it has lower RMSE. This not only indicates better model fit but also makes this model perfect fit for the given dataset because dataset has unusual high number of wine sample observation with zero count. Zero inflated Poisson regression model can handle such datasets well and can greately improves prediction accuracy by taking into acount parameters which can influence the occurence of zero records while making prediction**
+
+### **1. Model Inference**
+
+```{r}
+summary(model.poss.sel.robust)
+```
+
+#### From the above model summary we can say that following predicters are statistically significant while predicting target sample wine sale count
+
+* **Label Appeal: Positive coefficient indicates one unit increase in Label Appeal incrases the wine sample count**
+* **STARS: Positive coefficient indicates that one unit increase in STARS will increase the wine sample sale count**
+* **Acid Index: Negative coefficient indicates that one unit increae in Acid index will reduce the wine sample sale count**
+* **Fixed Acidity: Negative coefficient indicates that one unit increae in Fixed Acidity will reduce the wine sample sale count**
+
+#### This goes with our intuition as well. Above coefficients indicate that better Label Appeal and Stars count increases the wine sample sale count
+
+#### We can say that people don't like wine with high alcoholic content. As Acid Index and Fixed Acidity increases it negatively impacts wine sample sale count
+
+#### The coefficient for Stars is 0.34. This indicates that with all other coefficient held constant one unit increase in Stars increases **log** count of wine sale by 0.34
+
+#### Calculate impact of Stars count on wine sale
+
+```{r}
+exp(0.34)
+```
+
+#### This analysis indicates that with all other coefficeint held constant, one unit increase in Stars count increases wine sample sale count by 40%. This is a significant impact and that's why Stars count is very important for wine sale
+
+#### Calculate impact of Lable Appeal on wine sale
+
+```{r}
+exp(0.13)
+```
+
+#### This analysis indicates that with all other coefficeint held constant, one unit increase in Label Appeal increases wine sample sale count by 13%.
+
+
+### **2. Model Prediction**
+
+#### For prediction we will use Zero Inflated Poisson Regression model due to it's lower RMSE and better model fit
+
+# 5. Select Models
+
+### **1. Read evaluation data and impute missing columns. Perform prediction**
+
+```{r}
+testing = read.csv("./Data/wine-evaluation-data.csv", stringsAsFactors = FALSE, na.strings=c("NA","NaN", " ", ""))
+
+comp.data.test <- mice(testing,m=2,maxit=10,meth='pmm',seed=500)
+testing = complete(comp.data.test)
+
+out = predict(model.poss.zip, testing)
+testing$TARGET = round(out)
+write.table(testing, "./Data/PredictedOutcome.csv", row.names = FALSE, sep=",")
+```
+
+# 6. Appendix
+
+```{r}
+
+model.fit.evaluate.mcr <- function(model, test.data, test.values) {
+  output = predict(model, test.data)
+  mat = table(output, test.values)
+  mcr = sum(diag(mat))/sum(mat)
+  return(mcr)
+}
+
+model.fit.evaluate.rmse <- function(model, test.data, test.values) {
+  output = predict(model, test.data)
+  rmse = (sum((output - test.values)^2)) ^ 0.5
+}
+
+```
+
