@@ -1,0 +1,845 @@
+---
+title: "Poisson Regression.\nNegative Binomial Regression.\nMultinomial Logistic Regression.\nZero Inflated Poisson.\nNegative Binomial Regression."
+subtitle: 'Data 621: Homework 5 - Group 4'
+author:
+- Sachid Deshmukh
+- Michael Yampol
+- Vishal Arora
+- Ann Liu-Ferrara
+date: "December 5th, 2019"
+output:
+  html_document:
+    highlight: pygments
+    theme: cerulean
+    code_folding: show
+    toc: yes
+    toc_float: yes
+    toc_depth: 3
+    md_extensions: +grid_tables
+  pdf_document:
+    md_extensions: +grid_tables
+    toc: yes
+    toc_depth: 3
+classoption: portrait
+editor_options:
+  chunk_output_type: inline
+header-includes: 
+- \usepackage{graphicx}
+- \usepackage{float}
+---
+
+<style>
+  .main-container {
+    max-width: 1200px !important;
+  }
+</style>
+
+---
+\newpage
+
+```{r setup, include=F}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(Hmisc)
+library(ROCR)
+library(parallel)
+library(Boruta)
+library(VIM)
+library(mice)
+library(knitr)
+library(ROSE)
+library(DAAG)
+library(MASS)
+library(nnet)
+library(pscl)
+library(AER)
+library(arm)
+library(kableExtra)
+#opts_knit$set(root.dir = "D:/MSDS/Data621_Group4/HW-5/")
+mydir = "C:/Users/Michael/Dropbox/priv/CUNY/MSDS/201909-Fall/DATA621_Nasrin/20191205_HW5_Wine"
+opts_knit$set(root.dir = mydir)
+options(scipen = 999, digits=9, width=150)
+setwd(mydir)
+
+```
+
+# **0. Introduction**
+
+We are examining a dataset containing information about 12,000 commercially available wines, where the variables are mostly related to the chemical properties of the wine being sold.     
+
+The response variable `TARGET` is the number of sample cases of wine that were purchased by wine distribution companies after sampling a wine.    
+
+These cases would be used to provide tasting samples to restaurants and wine stores around the United States.     
+
+The more sample cases purchased, the more likely is a wine to be sold at a high-end restaurant.
+
+We are asked to study the data in order to predict the number of wine cases ordered, based upon the wine characteristics, because as a wine manufacturer, if we can predict the number of cases ordered, then we can adjust our wine offering to maximize sales.
+
+### List of variables in the dataset:
+
++-------------------+---------------------------------------------------------------------------------+
+|VARIABLE NAME      |DEFINITION            										                                        |
++===================+=================================================================================+
+|INDEX              |Identification Variable (do not use) 						                                |
++-------------------+---------------------------------------------------------------------------------+    
+|TARGET             |Number of Cases Purchased 									                                      |    
++-------------------+---------------------------------------------------------------------------------+    
+|AcidIndex          |Proprietary method of testing total acidity of wine by using a weighted average  |    
++-------------------+---------------------------------------------------------------------------------+    
+|Alcohol            |Alcohol Content                                                                  |    
++-------------------+---------------------------------------------------------------------------------+    
+|Chlorides          |Chloride content of wine                                                         |    
++-------------------+---------------------------------------------------------------------------------+    
+|CitricAcid         |Citric Acid Content                                                              |    
++-------------------+---------------------------------------------------------------------------------+    
+|Density            |Density of Wine                                                                  |    
++-------------------+---------------------------------------------------------------------------------+    
+|FixedAcidity       |Fixed Acidity of Wine                                                            |    
++-------------------+---------------------------------------------------------------------------------+    
+|FreeSulfurDioxide  |Sulfur Dioxide content of wine                                                   |     
++-------------------+---------------------------------------------------------------------------------+    
+|LabelAppeal        |Marketing Score indicating the appeal of label design for consumers.             |    
+|                   |High numbers suggest customers like the label design.                            |    
+|                   |Negative numbers suggest customers don't like the design.                        |    
+|                   |(Many consumers purchase based on the visual appeal of the wine label design.)   |    
+|                   |(Higher numbers suggest better sales.)                                           |    
++-------------------+---------------------------------------------------------------------------------+    
+|ResidualSugar      |Residual Sugar of wine                                                           |     
++-------------------+---------------------------------------------------------------------------------+    
+|STARS              |Wine rating by a team of experts.                                                |    
+|                   |4 Stars = Excellent, 1 Star = Poor                                               |    
+|                   |(A high number of stars suggests high sales)                                     |    
++-------------------+---------------------------------------------------------------------------------+    
+|Sulphates          |Sulfate content of wine                                                          |    
++-------------------+---------------------------------------------------------------------------------+    
+|TotalSulfurDioxide |Total Sulfur Dioxide of Wine                                                     |    
++-------------------+---------------------------------------------------------------------------------+    
+|VolatileAcidity    |Volatile Acid content of wine                                                    |    
++-------------------+---------------------------------------------------------------------------------+    
+|pH                 |pH of wine                                                                       |    
++-------------------+---------------------------------------------------------------------------------+    
+
+
+
+\newpage
+# 1. Data Exploration
+
+## Load training dataset
+```{r load-training, echo=FALSE}
+# Load the training data
+train.df = read.csv("./Data/wine-training-data.csv", stringsAsFactors = FALSE, na.strings=c("NA","NaN", " ", ""))
+```
+
+
+## Examine training dataset (transposed, to fit on page)
+```{r EDA-training, echo=FALSE}
+t(head(train.df)) %>% kable() %>% kable_styling(c("striped", "bordered"))
+print(paste("Number of columns = ", ncol(train.df)))
+print(paste("Number of rows = ", nrow(train.df)))
+```
+
+#### As we can see in the preview, training data has 16 columns and 12795 rows .
+
+### **Let's analyze datatypes of each column.**
+
+```{r training-datatypes, echo=FALSE}
+str(train.df)
+```
+
+#### All the columns are either Integer or numeric types. Please note that Integer columns in the above dataset are excellent candidate for creating categorical variables, which can further enhance quality of our models.
+
+### **Check missing values**
+
+#### Let's check whether any variables have missing values, i.e., values which are NULL or NA.
+
+
+```{r missing-values, echo=FALSE}
+miss.cols = apply(train.df, 2, function(x) any(is.na(x)))
+print(paste("Number of columns with missing values = ", length(names(miss.cols[miss.cols==TRUE]))))
+print(paste("Names of columns with missing values = ", paste(names(miss.cols[miss.cols==TRUE]), collapse = ', ')))
+      
+```
+
+#### We observe that the following 8 variables have missing values: 
+
+* ResidualSugar, 
+* Chlorides, 
+* FreeSulfurDioxide, 
+* TotalSulfurDioxide, 
+* pH, 
+* Sulphates, 
+* Alcohol, and 
+* STARS . 
+
+We will impute values for these variables for better model accuracy.
+
+### **Distribution of TARGET variable**
+
+```{r train-TARGET}
+table(train.df$TARGET)
+summary(train.df$TARGET)
+hist(train.df$TARGET, breaks=seq(-0.5,8.5),col="lightblue")
+```
+
+#### From the above histogram we can see that the distribution of the target variable is not exactly Poisson distributed.   
+#### We can see a high number of observations with zeros (n=2734). Then there is another peak around 4 and then it decreases towards the right. 
+#### The distribution also shows a skew in the right hand side where there are very few observations as the sample count increases.    
+#### This dataset is a very good candidate for ***Zero Inflated Poisson*** / ***Negative Binomial Regression*** since we can see the large number of observations with zero count.
+
+### Distribution of STARS feature
+```{r stars-table-hist}
+table(train.df$STARS, useNA="ifany")
+summary(train.df$STARS)
+barplot(table(train.df$STARS, useNA="ifany"),col="lightblue", 
+        main="Number of stars (rightmost bar=NA)")
+```
+
+
+We note that there are many cases where the number of stars is NA.   
+Does this mean that the wine was simply unrated?    
+Does it mean that it was awful (meriting zero stars?)   
+Perhaps the manufacturer knew that the wine was not good, and opted for it to be unrated?
+
+
+### Effect of STARS present or missing on TARGET
+```{r nostars, eval=T}
+
+## Value of TARGET when STARS is missing
+nostars <- train.df %>% filter(is.na(STARS))
+# table of TARGET values when STARS is missing
+table(nostars$TARGET)
+summary(nostars$TARGET)
+hist(nostars$TARGET, breaks=seq(-0.5,8.5),col="red")
+
+
+## Value of TARGET when STARS is not missing
+yesstars <- train.df %>% filter(!is.na(STARS))
+# table of TARGET values when STARS is missing
+table(yesstars$TARGET)
+summary(yesstars$TARGET)
+hist(yesstars$TARGET, breaks=seq(-0.5,8.5),col="green")
+```
+
+#### The above summaries reveal that for wines which have a missing STARS rating, 
+* the average number of cases ordered is 1.18, and 
+* the median quantity ordered is zero.  
+
+#### For wines which DO have a STARS rating, 
+* the average number of cases ordered is 3.686, and 
+* the median quatity is 4. 
+
+In such a circumstance, perhaps we should replace each "NA" for STARS with a **zero**, rather than imputing a value using the `MICE` package, as we do for other missing values?
+
+\newpage
+# 2. Data Preparation
+
+### Drop Index Column
+
+#### Remove the `Index` column since it is just an identifier and won't contribute toward the predictive capability of the model
+
+```{r drop-Index-column}
+train.df = train.df[1:nrow(train.df), 2:ncol(train.df)]
+```
+
+### **Impute missing data**
+
+#### Which columns have missing data, and what is the pattern for the missing data?    
+#### Let's leverage the VIM package to get this information.
+
+```{r VIM-aggr, echo=FALSE}
+ggr_plot <- aggr(train.df, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, 
+                 labels=names(train.df), cex.axis=.7, gap=3, 
+                 ylab=c("Histogram of missing data","Pattern"))
+```
+
+#### From the above missing values pattern we can see that variable `Stars` has the highest proportion of missing values, with about 25 percent of the observations missing any value for `Stars`.   
+
+Because no wine is rated "zero stars", the fact that the value is "NA" might indicate wine with 0 Star ratings.
+
+#### Let's replace NA STARS values with **zero**, before imputing other missing variables:
+```{r replace-STARS-na-with-ZEROES}
+train.df$STARS[is.na(train.df$STARS)]=0
+summary(train.df$STARS)
+```
+
+This change has reduced the average STARS value from 2.04 to 1.51 and has reduced the median value from 2 to 1.    
+
+
+#### All other variables have a very low proportion of missing observations.    
+#### This is good news because since this indicates good quality of input data.
+
+### **Let's use MICE package to impute missing values**
+
+```{r MICE-impute, echo=FALSE, output=FALSE}
+comp.data <- mice(train.df,m=2,maxit=10,meth='pmm',seed=500)
+saved.train.df = train.df
+train.df = complete(comp.data)
+```
+
+### Check variable correlation
+
+#### The variables which are highly correlated carry similar information and can affect model accuracy. Highly correlated variables also impact estimation of model coefficients. Let's determine which variables in the training datasets are highly correlated to each other.
+
+```{r check-correlation, echo=FALSE, fig.width=10,fig.height=10}
+  res2<-rcorr(as.matrix(train.df))
+  respearson=rcorr(as.matrix(train.df),type = "pearson")
+  resspearman=rcorr(as.matrix(train.df),type = "spearman")
+  res3 <- cor(as.matrix(train.df))
+
+```
+
+
+```{r pearson-rank-correl, echo=FALSE, fig.width = 18, fig.height=18}
+  corrplot::corrplot(corr = respearson$r, type = "upper", outline = T, order="hclust", 
+#### Pearson rank correlation
+           p.mat = respearson$P, sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nRank Correlation (Pearson)",
+           number.cex = 0.9, number.font = 2, number.digits = 2 )
+```
+
+#### Spearman rank correlation
+
+```{r spearman-rank-correl, echo=FALSE, fig.width = 18, fig.height=18}
+#### Spearman rank correlation
+  corrplot::corrplot(corr = resspearman$r, type = "upper", outline = T,  order="hclust", 
+           p.mat = resspearman$P, sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nRank Correlation (Spearman)",
+           number.cex = 0.9, number.font = 1, number.digits = 2)
+```
+
+
+#### Actual correlations
+```{r act-correlations, echo=FALSE, fig.width = 18, fig.height=18}
+#### actual correlations (not rank correlations)
+  corrplot::corrplot(corr = res3, type = "upper", outline = T,  order="hclust", 
+           sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nActual correlations (not rank correlations)",
+           number.cex = 0.9, number.font = 1, number.digits = 2 )
+```
+
+\newpage
+#### From the above correlation graphs we can see that target variable TARGET is highly correlated with following variables:
+
+* **STARS**
+
+#### Additionally we can see a significant **positive** correlation with the following variable:
+
+* **LabelAppeal**
+
+#### Finally, there is a modest **negative** correlation with the following variable:
+
+* **Acid Index**
+
+\newpage
+### **Feature Transformations**
+
+####  Transform **STARS** Variable
+
+#### Positive correlation between **STARS** and Target variable:
+```{r transform-STARS, eval=T}
+
+ggplot(train.df, aes(x= STARS, y = TARGET)) +
+  geom_count(aes(colour = factor(TARGET))) +
+  geom_smooth(method='lm') +
+  ggtitle("STARS (missing values replaced by 0) vs. TARGET (amt ordered)")
+
+train.df$StarTran = ifelse(train.df$STARS == 1, 2, train.df$STARS)
+```
+
+##### Table of raw STARS values:
+```{r STARSTable, eval=T}
+table(train.df$STARS)
+```
+
+We will transform **STARS* by aggregating all of the "1" and "2" star ratings together, onto "2"
+
+##### Table of transformed STARS values:
+```{r StarTranTable, eval=T}
+table(train.df$StarTran)
+```
+
+\newpage
+#### Transform **AcidIndex** variable
+
+#### Negative correlation between **AcidIndex** and Target variable: 
+```{r transform-AcidIndex, eval=T}
+ggplot(train.df, aes(x= AcidIndex, y = TARGET)) +
+  geom_count(aes(colour = factor(TARGET))) +
+  geom_smooth(method='lm') +
+  ggtitle("AcidIndex vs. TARGET (number of cases ordered)")
+
+train.df$AcidIndexTran = ifelse(train.df$AcidIndex <=6,  0, train.df$AcidIndex)
+train.df$AcidIndexTran = ifelse((train.df$AcidIndexTran > 6 & train.df$AcidIndexTran < 12),  
+                                1, train.df$AcidIndexTran)
+train.df$AcidIndexTran = ifelse(train.df$AcidIndexTran >= 12 ,  2, train.df$AcidIndexTran)
+```
+
+##### Table of raw AcidIndex values:
+```{r AcidIndexTable, eval=T}
+table(train.df$AcidIndex)
+```
+
+We transform **AcidIndex** into three groups by separating out the very low and very high values: 
+
+* 0: $4 \le AcidIndex \le 6$  
+* 1: $6   < AcidIndex  < 12$ 
+* 2: $12 \le AcidIndex \le 17$
+
+##### Table of transformed AcidIndex values:
+```{r AcidIndexTranTable, eval=T}
+table(train.df$AcidIndexTran)
+```
+
+
+\newpage
+#### Transform **LabelAppeal** Variable
+
+#### Positive correlation between  **LabelAppeal** and target variable:
+```{r transform-LabelAppeal, eval=T}
+ggplot(train.df, aes(x= LabelAppeal, y = TARGET)) +
+  geom_count(aes(colour = factor(TARGET))) +
+  geom_smooth(method='lm') +
+  ggtitle("LabelAppeal vs. TARGET (amt ordered)")
+
+train.df$LabelAppealTran = ifelse(train.df$LabelAppeal <0,  0, train.df$LabelAppeal)
+```
+
+##### Table of raw LabelAppeal values:
+```{r LabelAppealTable, eval=T}
+table(train.df$LabelAppeal)
+```
+
+We will transform **LabelAppeal** by aggregating all of the negative LabelAppeal values with zero (leaving "1" and "2" unchanged):
+
+##### Table of transformed LabelAppeal values:
+```{r LabelAppealTranTable, eval=T}
+table(train.df$LabelAppealTran)
+```
+
+\newpage
+# 3. Build Models
+
+```{r evaluate-functions, eval=T, echo=FALSE}
+
+model.fit.evaluate.mcr <- function(model, test.data, test.values) {
+ output = predict(model, test.data)
+ mat = table(output, test.values)
+ mcr = sum(diag(mat))/sum(mat)
+ return(mcr)
+}
+
+model.fit.evaluate.rmse <- function(model, test.data, test.values) {
+  output = predict(model, test.data)
+  output = round(output)
+  rmse = sqrt(
+            sum((output - test.values)^2)
+              /
+            length(test.values)
+            )
+    return(rmse)
+    }
+
+```
+
+
+## **Model fitting and evaluation**
+
+### For model evaluation we will use **Train/Test split** technique. 
+
+#### We will use **70%** of the data to train the model, and leverage the remaining **30%** to test the model.
+
+### **Model Evaluation Metrics**
+
+#### We will use following metrics for model evaluation and comparison:
+
+* **RMSE** : We wlll use Root Mean Square error to evaluate the **Poisson** and **Negative Binomial** models. 
++  Root mean square indicates the quality of model fit. 
++  Lesser RMSE indicates better model fit and higher RMSE indicates poor model fit. 
++  RMSE can be calculated as $RMSE=\sqrt{\frac{\sum\limits_{i=1}^n(y-\hat y)^2}{n}}$ .
+
+**where:**     
+
+* **$y$** : Actual value
+* **$\hat y$** : Predicted value
+
+* **Model Accuracy** : For the **multinomial** model we will use **accuracy** as the model evaluation metric. 
++ Informally, accuracy is the fraction of predictions our model got right.    
++ Formally, accuracy has the following definition: $Accuracy = \frac{(TP + TN)}{(TP + FP + TN + FN)}$
+
+**where:**   
+
+* **TP** : Stands for True Positives
+* **TN** : Stands for True Negatives
+* **FP** : Stands for False Positives
+* **FN** : Stands for False Negatives
+
+#### Now we are clear on our model fitting and evaluation method **(Train/Test split)** and also have model evaluation metrics **(RMSE and Accuracy)** which we will use to compare the model effectiveness.
+#### We are all set to build different models and access their relative performance.
+
+\newpage
+### **1. Split training data into train and test**
+```{r split-train-and-test, echo=TRUE}
+train.df.class = dplyr::rename(train.df, target = TARGET)
+dt = sort(sample(nrow(train.df.class), nrow(train.df.class)*.7))
+train.data = train.df.class[dt,]
+test.data = train.df.class[-dt,]
+test.values = test.data$target
+test.data = test.data[1:nrow(test.data), names(test.data)[names(test.data)!= 'target']]
+```
+
+There are `r dim(train.data)[1]` cases in the training set and `r dim(test.data)[1]` cases in the test set.   
+(The original dataset had `r dim(train.df)[1]` cases .)
+
+\newpage
+### **2. Poisson regression model with all variables**
+```{r poisson-full-model, echo=TRUE}
+model.pois.all = glm(target~  ., family=poisson, data=train.data)
+summary(model.pois.all)
+rmse.pois.all = model.fit.evaluate.rmse(model.pois.all, test.data, test.values)
+print(paste("RMSE: ",rmse.pois.all))
+```
+
+\newpage
+### **3. Reduced Poisson regression model with selected variables**
+#### We include the following variables:
+
+* LabelAppeal 
+* STARS  
+* AcidIndex  
+
+```{r Poisson-reduced-model, echo=TRUE}
+model.pois.sel = glm(target~  LabelAppeal + STARS + AcidIndex , family=poisson, data=train.data)
+summary(model.pois.sel)
+rmse.pois.sel = model.fit.evaluate.rmse(model.pois.sel, test.data, test.values)
+print(paste("RMSE: ",rmse.pois.sel))
+
+```
+
+#### From the RMSE analysis of 
+
+* Poisson Regression model with all variables, and 
+* Reduced Poisson regression model with selected variables, 
+
+#### we can see that even though the RMSE of the Poisson regression model with all variables is smaller, there is not much difference. 
+
+#### Going forward we will prefer the reduced model, to maintain model simplicity and to make the model more interpretable by removing many  variables of lesser significance.
+
+\newpage
+### **4. Model Dispersion test**
+
+```{r dispersiontest-1}
+dispersiontest(model.pois.sel)
+```
+
+#### The model dispersion test is 0.858, with a p-value equal to 1, which means that we ***fail to reject*** the null hypothesis that the dispersion is less than 1.
+
+This indicates **under-dispersion**. 
+For the Poisson assuption to hold true, we need mean and variance of the target variable to be the same.   
+If mean is greater than variance it results in over-dispersion.    
+If mean is less than variance it results in under-dispersion.   
+
+#### Because the Poisson model violates the assumption (Mean = Var), the result will be inaccurate calculation of standard errors for model coefficients. 
+
+#### The magnitude of model **coefficients** will be unaffected, but 
+#### inaccurate standard errors will yield inaccurate calculation of confidence intervals of the model coefficients and will in turn result in inaccurate inference.
+
+
+#### **Negative Binomial** regression is well-suited for **overdispersion**. 
+#### For **underdispersion**, Negative Binomial regression is **not reccomended**. 
+#### However, let's try Negative Binomial Regression on the above dataset and compare the results:
+
+\newpage
+### **5. Negative Binomial Regression**
+
+```{r neg-binom, eval=T}
+negbio = glm.nb(target~  LabelAppeal + STARS + AcidIndex , data=train.data)
+summary(negbio)
+rmse.nb = model.fit.evaluate.rmse(negbio, test.data, test.values)
+# Compute RMSE
+print(paste("RMSE:", rmse.nb))
+```
+
+
+\newpage
+### **6. Robust Poisson regression model**
+
+#### In general it is a good idea to fit the **Robust Poisson** regression model to get accurate estimation for Std Errors. 
+#### Since the dataset indicates **under-dispersion** it is a good idea to fit **Robust Poisson** regression model and check whether we see any difference in the Std Error estimation for the model regression coefficients.
+
+```{r robust-poisson, eval=T}
+model.pois.sel.robust = glm(target~  LabelAppeal + STARS + AcidIndex , 
+                            family=quasipoisson, data=train.data)
+summary(model.pois.sel.robust)
+rmse.pois.sel.robust = model.fit.evaluate.rmse(model.pois.sel.robust, test.data, test.values)
+print(rmse.pois.sel.robust)
+```
+
+\newpage
+### **7. Compare Negative Binomial, Poisson Regression, and Robust Poisson Regression models: Coefficients and Std Errors**
+
+```{r compare-results, eval=T}
+pois.coef = coef(model.pois.sel)
+negbinom.coef = coef(negbio)
+pois.stderr = se.coef(model.pois.sel)
+negbinom.stderr = summary(negbio)$coefficients[, 2]
+pois.robust.coef = coef(model.pois.sel.robust)
+pois.robust.stderr = se.coef(model.pois.sel.robust)
+df.analysis = cbind(pois.coef,   negbinom.coef,   pois.robust.coef, 
+                    pois.stderr, negbinom.stderr, pois.robust.stderr)
+head(df.analysis,10) %>% kable() %>% kable_styling(c("striped", "bordered"))
+```
+
+#### From the above table we can see that model coefficients and std errors for **Poisson** and **Negative Binomial** regression models are the same (up to 5 decimal places.)
+#### This can be due to the fact that under-dispersion in the dataset is not severe enough to impact the accuracy of the Poisson regression model.
+
+#### From the above table we can see that model **coefficients** for **Poisson** Regression and **Robust Poisson** Regression models are **same**, but the estimates for **Std Errors** are **different**. 
+
+#### This is expected since the dataset has **under-dispersion**.    
+
+#### Std Error estimations for regression coefficients of the **Poisson** regression model will **not** be accurate.   
+
+#### We need to rely on Std Error estimates from the **Robust Poisson** regression model, which is better suited for datasets exhibiting under-dispersion or over-dispersion.    
+
+#### If we need to use these coefficients for inference, it is better to rely on Std Error estimates from the **Robust Poisson** regression model to calculate the confidence intervals,  rather than from the normal Poisson regression model, for better accuracy of inference.
+
+\newpage
+### **8. Fit Zero-Inflated Poisson (ZIP) Regression model**
+
+```{r ZIP, eval=T}
+## For technical reasons, we include the otherwise insignificant variable "FixedAcidity" 
+## because when omitting it, we get "NANs produced" on the Zero-Inflated Negative Binomial (below)
+## and we want to keep the same formula to facilitate comparison between the two models
+
+model.pois.zip= zeroinfl(target~  LabelAppeal + STARS + AcidIndex +FixedAcidity|STARS, 
+                         dist='poisson', data=train.data)
+summary(model.pois.zip)
+rmse.pois.zip = model.fit.evaluate.rmse(model.pois.zip, test.data, test.values)
+print(paste("RMSE: ",rmse.pois.zip))
+```
+
+#### We can see that the ***Zero-Inflated Poisson*** regression model has greatly improved the RMSE, indicating a much better fit for the model. 
+
+This is due to the fact that dataset has an unusually high number of cases with zeros for the STARS (indicating either that the wine was not rated, or that was so bad that it merited zero stars.)    
+
+This makes this dataset a better fit for ***Zero Inflated Poisson*** regression model.    
+
+Note that we need to specify the parameter for Zero Inflated Poisson regression model, specifying which feature contributes to more occurences of cases with zero target variable. The obvious choice here is the STARS variable. It is intuitive to think that if the number of STARS are more it will contribute to increased count of wine sample purchase.   
+
+We fit our model designating `STARS` as the parameter which impacts the number of records with zero `TARGET` value and we can see that it this results in smaller RMSE, indicating better model fit compared to the regular Poisson regression model.
+
+
+### **9. Fit Zero-Inflated Negative Binomial Regression model**
+
+```{r ZI-NB, eval=T}
+## we include the otherwise insignificant variable "FixedAcidity" because 
+## when omitting it, we get "NANs produced"
+model.nb.zip= hurdle(target~  LabelAppeal + STARS + AcidIndex + FixedAcidity|STARS, 
+                     dist='negbin', data=train.data)
+summary(model.nb.zip)
+rmse.nb.zip = model.fit.evaluate.rmse(model.nb.zip, test.data, test.values)
+print(paste("RMSE: ", rmse.nb.zip))
+```
+
+#### We can see that Zero Inflated Poisson regression model has lower RMSE (1.3470) compared to Zero Inflated Negative Binomial model (1.3493).     
+#### This is due to the fact that dataset has under-dispersion, and the Negative Binomial model is not recommended when there is under-dispersion in the dataset.
+
+### **10. Fit Multinomial Logistic Regression model with selected variables**
+
+#### Since this is a Multinomial Regression model, we will use ***Accuracy*** as a model evaluation metric, as stated in the model evaluation criteria above.
+
+```{r Multinomial-Logistic, eval=T}
+train.data.class = train.data
+train.data.class$target = factor(train.data.class$target)
+model.multi= multinom(target~  LabelAppeal + STARS + AcidIndex ,  data=train.data.class)
+summary(model.multi)
+accuracy.multi = model.fit.evaluate.mcr(model.multi, test.data, test.values)
+print(paste("ACCURACY: ",accuracy.multi))
+```
+
+
+#### From the above Accuracy metric we can say that with the Accuracy score of 0.49,  we can predict wine sample purchase count with 49% accuracy. 
+
+#### This is not a great accuracy score. 
+
+#### This is expected since the Multinomial regression model is not relevant for this problem statement.    
+#### The Multinomial regression model can be used to predict un-ordered target classes with multiple values.    
+#### However in this problem statement we are dealing with a numerical target variable which is wine sample purchase count.    
+#### The target variable is ordered here (indeed, it is numeric) and that makes the Poisson regression model more applicable here compared to the Multinomial Logistic Regression model.
+
+### **11. Fit multiple linear regression model with all the variables**
+
+```{r linear-full, eval=T}
+model.multilr= lm(target~  .,  data=train.data)
+summary(model.multilr)
+rmse.multilr = model.fit.evaluate.rmse(model.multilr, test.data, test.values)
+print(paste("RMSE: ", rmse.multilr))
+```
+
+### **12. Fit multiple linear regression model with selected variables and cubic transformation of Stars variable**
+
+```{r linear-reduced, eval=T}
+model.multilr.sel= lm(target~  LabelAppeal + poly(STARS,3) + AcidIndex ,  data=train.data)
+summary(model.multilr.sel)
+rmse.multilr.sel = model.fit.evaluate.rmse(model.multilr.sel, test.data, test.values)
+print(rmse.multilr.sel)
+```
+
+
+#### Interestingly we are getting a very close RMSE between the Zero Inflated Poisson Regression model and Multiple Linear regression model with selected variables (plus the cubic transformed Stars variable).
+
+#### This is possible here because the distribution of the target variable was not strictly Poisson.    
+#### The distribution looked more like a bimodal with skew on the right side.    
+#### We can say that both Zero-Inflated Poisson regression models perform as well as the multiple linear regression model with cubic term of Stars variable.
+
+\newpage
+# 4. Select Models
+
+#### From the above model fits we can conclude the following:
+
+
+* For ***Inference*** we select the **Robust Poisson Regression** model. We are selecting this model for inference even though it doesn't have great RMSE. We are doing this because: 
++ Robust Poisson regression model is interpretable compared to Zero-Inflated Poisson regression model, and 
++ Std Error estimation is better for Robust Poisson regression model. 
+This is more important here because the dataset has under-dispersion, and we need to stick to the Robust Poisson regression model for inference rather than the simple Poisson regression model.
+
+* For ***Prediction*** we select the **Zero Inflated Poisson** Regression model. 
++ We are selecting this model because it has **lower RMSE**. 
++ This not only indicates better model fit, but it also makes this model a perfect fit for the given dataset because this dataset has an unusually high number of wine sample sale observations with zero count, as well as an unusually high number of wines which were unrated (STARS=NA), which we decided to replace with zeros.
+
+The Zero-Inflated Poisson regression model can handle such datasets well and can greatly improve prediction accuracy by taking into account features which can influence the occurence of zero records while making predictions.
+
+\newpage
+## **1. Model Inference**
+
+### **Robust Poisson Regression**
+```{r inference, eval=T}
+summary(model.pois.sel.robust)
+```
+
+#### From the above model summary we can say that following predictors are statistically significant while predicting target sample wine sale count:
+
+* **LabelAppeal**: Positive coefficient indicates that a one unit increase in Label Appeal **increases** the wine sample count
+* **STARS**: Positive coefficient indicates that a one unit increase in STARS will **increase** the wine sample sale count
+* **AcidIndex**: Negative coefficient indicates that a one unit increase in Acid index will **reduce** the wine sample sale count
+
+
+#### This goes with our intuition as well. The above coefficients indicate that better LabelAppeal and STARS ratings increase the wine sample sale count.
+
+#### We can say that people don't like wine with high acidity. As AcidIndex increases, it negatively impacts wine sample sale count.
+
+#### The coefficient for Stars is 0.31. This indicates that with all other coefficients held constant, one unit increase in Stars increases **log** of wine sale by 0.31 .
+
+#### Calculate impact of STARS count on actual wine sale: $e^{0.31}$
+
+```{r STARS-impact, eval=T}
+exp(0.31)
+```
+
+#### This analysis indicates that with all other coefficient held constant, one unit increase in `STARS` increases the wine sample sale count by 36.3%. This is a significant impact and that's why the STARS rating is very important for wine sales -- restaurants are more interested in stocking higher-rated wines because they don't want to disappoint their diners with unpalatable wines.
+
+
+#### The coefficient for LabelAppeal is 0.1349. This indicates that with all other coefficients held constant, one unit increase in LabelAppeal increases **log** of wine sale by 0.1349 .
+
+#### Calculate impact of LabelAppeal on wine sale: $e^{0.1349}$
+
+```{r LabelAppeal-impact, eval=T}
+exp(0.1349)
+```
+
+#### This analysis indicates that with all other variables held constant, a one unit increase in Label Appeal increases wine sample sale count by 14.4%.
+
+
+#### The coefficient for AcidIndex is -0.0893. This indicates that with all other coefficients held constant, one unit increase in AcidIndex increases **log** of wine sale by -0.0893 .
+
+#### Calculate impact of AcidIndex on wine sale: $e^{-0.0893}$
+
+```{r AcidIndex-impact, eval=T}
+exp(-0.0893)
+```
+
+#### This analysis indicates that with all other variables held constant, a one unit increase in AcidIndex DECREASES wine sample sale count by 8.54%.
+
+
+\newpage
+## **2. Model Prediction**
+
+#### For ***prediction*** we will use the **Zero Inflated Poisson** Regression model due to its lower RMSE and better model fit.
+```{r prediction, eval=T}
+summary(model.pois.zip)
+```
+
+These coefficients differ from the those in the regular Poisson regression model because the Zero Inflation component has separated out those cases for which the target values are "Certain Zeros", as driven by the STARS value.  
+
+From the Zero-Inflation model, the intercept  0.3581899 represents log(OddsRatio) that TARGET=0 if STARS=0.   
+Therefore, the OddsRatio of this occuring is $e^{0.3581899}=`r round(exp(0.3581899),4)`$, which indicates an increased likelihood of occurance since OddsRatio > 1.    
+The coefficient  -2.2112170 represents the change to log(Odds Ratio) with each added STAR rating for the wine. So when a wine has a 1 star rating, the log(OddsRatio) becomes  0.3581899 - 2.2112170 = -1.8520271, which means the Odds Ratio becomes $e^{-1.8520271}=`r round(exp(-1.8520271),4)`$ which indicates an unlikely occurence because this OddsRatio < 1.
+
+Once such cases are removed, the above Poisson model shows different coefficients, where a one-unit increase in LabelAppeal indicates a 0.225 increase in log(wine sales), which translates to a `r round(100*(exp(0.225)-1),2)` percent increase in wine sales.   
+
+After removal of the Zero-Inflated cases, the Poisson model coefficient of 0.101955 on STARS indicates that an increase in rating of 1 star indicates a 0.101955 increase in log(wine sales), which translates to a `r round(100*(exp(0.101955)-1),2)` percent increase in wine sales.
+
+
+
+
+
+
+\newpage
+## **3. Read evaluation data and impute missing columns.**
+
+```{r predict-evaluation-data, eval=T}
+evaluation = read.csv("./Data/wine-evaluation-data.csv", 
+                      stringsAsFactors = FALSE, 
+                      na.strings=c("NA","NaN", " ", ""))
+
+#### How many cases in the evaluation data with missing STARS ?
+summary(evaluation$STARS)
+table(evaluation$STARS,useNA = "ifany")
+
+#### Let's replace NA STARS values with **zero**, before imputing other missing variables:
+evaluation$STARS[is.na(evaluation$STARS)]=0
+
+#### What does STARS data look like now ?
+summary(evaluation$STARS)
+table(evaluation$STARS,useNA = "ifany")
+
+#### Making this change has reduced the mean STARS value from 2.04 to 1.53, 
+#### and the median from 2 to 1.
+
+#### Impute the other missing data points
+comp.data.evaluation <- mice(evaluation,m=2,maxit=10,meth='pmm',seed=500)
+evaluation = complete(comp.data.evaluation)
+```
+
+\newpage
+## **4. Perform prediction and write out the results**
+```{r predict-and-write, eval=T}
+#### Perform the prediction
+out = predict(model.pois.zip, evaluation)
+evaluation$TARGET = round(out)
+
+#### write the results
+write.table(evaluation, "./Data/PredictedOutcome_HW5.csv", row.names = FALSE, sep=",")
+```
+
+\newpage
+# 5. Appendix
+
+```{r Output-Predictions, eval=F}
+
+model.fit.evaluate.mcr <- function(model, test.data, test.values) {
+  output = predict(model, test.data)
+  mat = table(output, test.values)
+  mcr = sum(diag(mat))/sum(mat)
+  return(mcr)
+}
+
+model.fit.evaluate.rmse <- function(model, test.data, test.values) {
+  output = predict(model, test.data)
+  rmse = sqrt(sum((output - test.values)^2)/length(test.values))
+}
+
+```
+
