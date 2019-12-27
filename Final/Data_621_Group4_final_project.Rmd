@@ -1,0 +1,3354 @@
+---
+title: "CitiBike Data Analysis"
+date: "12/20/2019"
+subtitle: "Data 621: Final Project - Group 4"
+author:
+- Michael Yampol
+- Ann Liu-Ferrara
+- Sachid Deshmukh
+- Vishal Arora
+output:
+  pdf_document:
+    md_extensions: +grid_tables
+    toc: yes
+    toc_depth: 3
+    keep_md: yes
+    keep_tex: yes
+  html_document:
+    highlight: pygments
+    theme: cerulean
+    code_folding: show
+    toc: yes
+    toc_float: yes
+    toc_depth: 3
+    keep_md: yes
+    md_extensions: +grid_tables
+classoption: portrait
+bibliography: bibliography.bib
+biblio-style: "apalike"   
+link-citations: yes
+urlcolor: blue
+linkcolor: blue
+editor_options:
+  chunk_output_type: inline
+header-includes: 
+- \usepackage{graphicx}
+- \usepackage{float}
+---
+
+<style>
+  .main-container {
+    max-width: 1200px !important;
+  }
+</style>
+
+---
+
+```{r setup, echo=F,message=F,warning=F}  
+knitr::opts_chunk$set(echo = TRUE, fig.pos = 'h')
+mydir = "C:/Users/Michael/Dropbox/priv/CUNY/MSDS/201909-Fall/DATA621_Nasrin/20201214_FinalProject/"
+#mydir = "./"
+setwd(mydir)
+knitr::opts_knit$set(root.dir = mydir)
+options(digits=7,scipen=999,width=120)
+datadir = paste0(mydir,"/Data/")
+
+
+### This contains all the data -- total 90.4M rows, 17GB size, 77 monthly files 
+rawdatadir = "C:/temp/CitibikeData/"
+### This contains 1/1000 of the rows from each of the data files -- total 90.4K rows, 17MB size
+slimdatadir = "C:/temp/CitibikeDataSlim/"
+#slimdatadir = "./CitibikeDataSlim/"
+```
+
+
+
+```{r load-libraries, echo=F,message=F,warning=F}
+### Load libraries
+library(tidyverse)
+library(lubridate)
+library(sp)
+library(Hmisc)
+library(corrplot)
+library(forcats)
+library(kableExtra)
+library(ggplot2)
+library(reshape)
+```
+
+
+\newpage
+
+# 0. Abstract 
+
+<!-- Short summary of the research problem and its importance, what you do and what you find
+
+     A person reading your abstract should get a good sense of what problem you addressed and how you addressed it without having to look at the rest of the paper 
+-->
+
+Bicycling is an activity which yields many benefits:  Riders improve their health through exercise, while traffic congestion is reduced if riders move out of cars, with a corresponding reduction in pollution from carbon emissions.  In recent years, Bike Sharing has become popular in a growing list of cities around the world.  The NYC "CitiBike" bicycle sharing scheme went live (in midtown and downtown Manhattan) in 2013, and has been expanding ever since, both as measured by daily ridership as well as the expanding geographic footprint incorporating a growing number of "docking stations" as the system welcomes riders in Brooklyn, Queens, and northern parts of Manhattan which were not previously served.
+
+One problem that many bikeshare systems face is money.  An increase in the number of riders who want to use the system necessitates that more bikes be purchased and put into service in order to accomodate them.  Heavy ridership induces wear on the bikes, requiring for more frequent repairs.   However, an increase in the number of trips does not necessarily translate to an increase in revenue because riders who are clever can avoid paying surcharges by keeping the length of each trip below a specified limit (either 30 or 45 minutes, depending on user category.)
+
+We seek to examine CitiBike ridership data, joined with daily NYC weather data, to study the impact of weather on shared bike usage and generate a predictive model which can estimate the number of trips that would be taken on each day.  
+The goal is to estimate future demand which would enable the system operator to make expansion plans.
+
+Our finding is that ridership exhibits strong seasonality, with correlation to weather-related variables such as daily temperature and precipitation.  Additionally, ridership is segmented by by user_type (annual subscribers use the system much more heavilty than casual users), gender (there are many more male users than female) and age (a large number of users are clustered in their late 30s).
+
+
+## Keywords 
+
+Bikeshare, Weather, Cycling, CitiBike, New York City
+
+# 1. Introduction 
+
+<!-- * What is the general area? What is the exact problem you are addressing?
+
+* Why is it important? (why should I be interested as a reader?)
+
+* What are the objectives of the research? What are your hypotheses?
+
+* How is the paper structured?
+-->
+
+Since 2013 a shared bicycle system known as [CitiBike](http://www.citibikenyc.com) has been available in New York City.  The benefits to having such a system include reducing New Yorkers' dependence on automobiles and encouraging public health through the exercise attained by cycling. Additionally, users who would otherwise spend money on public transit may find bicycling more economical -- so long as they are aware of CitiBike's pricing constraints.   
+
+There are currently about 12,000 shared bikes which users can rent from about 750 [docking stations](https://member.citibikenyc.com/map/) located in Manhattan and in western portions of Brooklyn and Queens.  A rider can pick up a bike at one station and return it at a different station. The system has been expanding each year, with increases in the number of bicycles available and expansion of the geographic footprint of docking stations.  For planning purposes, the system operator needs to project future ridership in order to make good investments.
+
+The available usage data provides a wealth of information which can be mined to seek trends in usage.  With such intelligence, the company would be better positioned to determine what actions might optimize its revenue stream.
+
+* Because of weather, ridership is expected to be lower during the winter months, and on foul-weather days during the rest of the year, than on a warm and sunny summer day.  Using the weather data we can seek to model the relationship between bicycle ridership and fair/foul or hot/cold weather.
+
+* What are the differences in rental patterns between annual members (presumably, local residents) vs. casual users (presumably, tourists?)
+
+* Is there any significant relationship between the age and/or gender of the bicycle renter vs. the rental patterns?
+
+The rest of the paper proceeds as follows:   
+
+* In **section 2** we review literature on bike share systems, some of which examine the relationship of weather on ridership.
+* In **section 3** we examine the methodology from the standpoint of data sources, collection, cleaning, exploratory data analysis (EDA), limitations, aggregation, and statistical modeling choices.
+* In **section 4** we discuss results from our modeling.
+* In **section 5** we present discussion of the challenges faced in this project and analysis that we commenced but chose to discard.
+* In **section 6** we present a conclusion and summary of the results,and discuss proposed future research and enhancements.
+* In the **appendix** we provide graphs, tables, and a listing of the R statistical programming code used to perform the data manipulation, modeling, and visualization.
+
+# 2. Literature review 
+
+**Westland** et al. examined consumer behavior in bike sharing in Beijing using a deep-learning model incorporating weather and air quality, time-series of demand, and geographical location; later adding customer segmentation. [@Westland_Mou_Yin_2019]
+
+**Jia** et al. performed a retrospective study of dockless bike sharing in Shanghai to determine whether introduction of such program increased cycling.  Their methodology was to survey people in various neighborhoods where the areas were selected by sampling, and the individuals were selected by interviewing individuals on the street. [@Jia_Ding_Gebel_Chen_Zhang_Ma_Fu_2019]
+
+**Jia and Fu** further examined whether dockless bicycle-sharing programs promote changes
+in travel mode in commuting and non-commuting trips, as well as the association between
+change in travel mode and potential correlates, as part of the same Shanghai study. [@Jia_Fu_2019]
+
+**Dell'Amico** et al. modeled bike sharing rebalancing programs initially in Reggio Emilia, Italy using branch-and-cut algorithms. [@DellAmico_Hadjicostantinou_Iori_Novellani_2014]
+
+In a more recent paper, **Dell'Amico** et al. examined the bike-sharing rebalancing problem with Stochastic Demands, aimed at determining minimum cost routes for a fleet of homogeneous vehicles in order to redistribute bikes among stations. [@DellAmico_Iori_Novellani_Subramanian_2018]
+
+**Zhou** analyzed massive bike-sharing data in Chicago, constructing a bike flow similarity graph and using a
+fast-greedy algorithm to detect spatial communities of biking flows. He examined the questions 1. How do bike flow patterns vary as a result of time, weekday or weekend, and user groups? 2. Given the flow patterns, what was the
+spatiotemporal distribution of the over-demand for bikes and docks in 2013 and 2014?  [@Zhou_2015]
+
+**Hosford** et al. surveyed participants in Vancouver, Canada and determined that public bicycle share programs are not used equally by all segments of the population. In many cities, program members tend to be male, Caucasian, employed, and have higher educations and incomes compared to the general population.  Further, their study determined that the majority of bicycle share trips replace trips previously made by walking or public transit, indicating that bicycle share appeals to people who already use active
+and sustainable modes of transportation [@Hosford_Lear_Fuller_Teschke_Therrien_Winters_2018]
+
+In another paper, **Hosford** et al. determined that that the implementation
+of the public bicycle share program in Vancouver was
+associated with greater increases in bicycling for those living and
+working inside the bicycle share service area relative to those outside
+the service area in the early phase of implementation, but this effect did
+not sustain over time. [@Hosford_Fuller_Lear_Teschke_Gauvin_Brauer_Winters_2018]
+
+**Schmidt** observed that the number of bike-sharing programs worldwide grew from 5 in 2005 to 1,571 in 2018. He further noted that disparities in bike-sharing usage are evident around the country, with users skewing towards younger white men. [@Schmidt_2018]
+
+**Wang** et al. examined the rebalancing problem and determined that the fluctuation of the available bikes and docks is not only caused by the user but also by the operators’ own (inefficient) rebalancing activities; they propose a data-driven model to generate an optimal rebalancing model while minimizing the cost of moving the bikes.  [@Wang_He_Zhang_Shu_Liu_Gu_Liu_Lee_Son_2018]
+
+**Vogel and Mattfeld** observe that Short rental times and one-way use lead to imbalances in the spatial distribution of bikes at stations over time, and present a case study demonstrating that Data Mining applied to operational data offers insight into typical usage patterns of bike-sharing systems and is used to forecast bike demand with the aim of supporting and improving strategic and operational planning.  They analyze both operational data from Vienna's shared bike rental system as well as local weather data over the period. [@Vogel_Mattfeld_2011]
+
+**Fuller** et al. examined the impact of a public transit strike (November 2016 in Philadelphia) on usage of the bike share service in that city. [@Fuller_Luan_Buote_Auchincloss_2019]
+
+In an earlier study, **Fuller** et al. examined bikeshare in Montreal by collecting samples prior to the launch of the program, and following each of the first two seasons. [Unlike other cities such as New York, the Montreal bike share system does not operate year-round.  Rather, because of the especially harsh winters, their bikeshare system is dismantled each fall and reinstalled each spring.] Fuller's methodology incorporated a 5-step logistic regression in which the weather variables entered at step 4; this rendered nonsignificant the differences between the three survey periods. [@Fuller_Gauvin_Kestens_Daniel_Fournier_Morency_Drouin_2013]
+
+**Faghih-Imani and Eluru** study the decision process involved in identifying destination locations after picking up the bicycle at a BSS station. 
+In the traditional destination/location choice approaches, the model frameworks implicitly assume that the influence of exogenous factors on the destination preferences is constant across the entire population. 
+They propose a *finite mixture multinomial logit* (FMMNL) model that accommodates such heterogeneity by probabilistically assigning trips to different segments and estimating segment-specific destination choice models for each segment. 
+Unlike the traditional destination-choice-based *multinomial logit* (MNL) model or *mixed multinomial logit* (MMNL), in an FMMNL model, we can consider the effect of fixed attributes across destinations such as users’ or origins’ attributes in the decision process.
+[@Faghih-Imani_Eluru_2018]
+
+**An** et al. examine weather and cycling in New York City and find that weather impacts cycling rates
+more than topography, infrastructure, land use mix, calendar events, and peaks. They do so by exploring a series of interaction effects, which each capture the extent to which two characteristics occurring simultaneously
+exert a combinatorial effect on cycling ridership -- e.g, how is cycling impacted when it is both wet and a weekend day or humid day in the hilliest parts of the cycling network? [@An_Zahnow_Pojani_Corcoran_2019]
+
+**Heaney** et al. examine the relation between ambient temperature and bikeshare usage and to project how climate change-induced increasing ambient temperatures may influence active transportation in New York City.
+[@Heaney_Carrión_Burkart_Lesk_Jack_2019]
+
+In the 1990s, **Nankervis** examined the effect of weather and climate on university student bicycle commuting patterns in Melbourne, Australia by examining counts of parked bicycles at local universities and correlating with the weather for each day, finding that the deterrent effect of bad weather on commuting was less than commonly believed (though still significiant.) [@Nankervis_1999]
+
+\newpage
+# 3. Methodology 
+
+## Data sources and uploading
+
+We obtained data from two sources:  
+
+### 1. CitiBike trip dataset
+
+CitiBike makes a vast amount of [data](https://www.citibikenyc.com/system-data) available regarding system usage as well as sales of memberships and short-term passes.  
+
+For [each month](https://s3.amazonaws.com/tripdata/index.html) since the system's inception, there is a file containing details of (almost) every trip.  (Certain "trips" are omitted from the dataset.  For example, if a user checks out a bike from a dock but then returns it within one minute, the system drops such a "trip" from the listing, as such "trips" are not interesting.)
+
+There are currently 77 monthly data files for the New York City bikeshare system, spanning July 2013 through November 2019.  Each file contains a line for every trip.  The number of trips per month varies from as few as 200,000 during winter months in the system's early days to more than 2 million trips this past summer.  The total number of entries was more than 90 million, resulting in 17GB of data.    Because of the computational limitations which this presented, we created samples of 1/1000 and 1/100 of the data.  The samples were created deterministically, by subsetting the files on each 1000th (or, 100th) row.  
+
+### 2. Central Park daily weather data
+
+Also we obtained historical weather information for 2013-2019 from the NCDC (National Climatic Data Center) by submitting an online request to https://www.ncdc.noaa.gov/cdo-web/search .  Although the weather may vary slightly within New York City, we opted to use just the data associated with the Central Park observations as proxy for the entire city's weather.
+
+We believe that the above data provides a reasonable representation of the target population (all CitiBike rides) and the citywide weather.
+
+
+
+```{r weather-data, echo=F, message=F, warning=F}
+# Weather data is obtained from the  NCDC (National Climatic Data Center) via https://www.ncdc.noaa.gov/cdo-web/
+# click on search tool  https://www.ncdc.noaa.gov/cdo-web/search
+# select "daily summaries"
+# select Search for Stations
+# Enter Search Term "USW00094728" for Central Park Station: 
+# https://www.ncdc.noaa.gov/cdo-web/datasets/GHCND/stations/GHCND:USW00094728/detail
+# "add to cart"
+
+
+weatherfilenames=list.files(path="./",pattern = '.csv$', full.names = T)    # ending with .csv ; not .zip
+#weatherfilenames
+weatherfile <- "NYC_Weather_Data_2013-2019.csv"
+
+## Perhaps we should rename the columns to more clearly reflect their meaning?
+weatherspec <- cols(
+  STATION = col_character(),
+  NAME = col_character(),
+  LATITUDE = col_double(),
+  LONGITUDE = col_double(),
+  ELEVATION = col_double(),
+  DATE = col_date(format = "%F"),          #  readr::parse_datetime() :   "%F" = "%Y-%m-%d"
+  #DATE = col_date(format = "%m/%d/%Y"), #col_date(format = "%F")
+  AWND = col_double(),                     # Average Daily Wind Speed
+  AWND_ATTRIBUTES = col_character(),
+  PGTM = col_double(),                    # Peak Wind-Gust Time
+  PGTM_ATTRIBUTES = col_character(),
+  PRCP = col_double(),                    # Amount of Precipitation
+  PRCP_ATTRIBUTES = col_character(),
+  SNOW = col_double(),                    # Amount of Snowfall
+  SNOW_ATTRIBUTES = col_character(),
+  SNWD = col_double(),                    # Depth of snow on the ground
+  SNWD_ATTRIBUTES = col_character(),
+  TAVG = col_double(),                    # Average Temperature (not populated)
+  TAVG_ATTRIBUTES = col_character(),
+  TMAX = col_double(),                    # Maximum temperature for the day
+  TMAX_ATTRIBUTES = col_character(),
+  TMIN = col_double(),                    # Minimum temperature for the day
+  TMIN_ATTRIBUTES = col_character(),
+  TSUN = col_double(),                    # Daily Total Sunshine (not populated)
+  TSUN_ATTRIBUTES = col_character(),
+  WDF2 = col_double(),                    # Direction of fastest 2-minute wind
+  WDF2_ATTRIBUTES = col_character(),
+  WDF5 = col_double(),                    # Direction of fastest 5-second wind
+  WDF5_ATTRIBUTES = col_character(),
+  WSF2 = col_double(),                    # Fastest 2-minute wind speed
+  WSF2_ATTRIBUTES = col_character(),
+  WSF5 = col_double(),                    # fastest 5-second wind speed
+  WSF5_ATTRIBUTES = col_character(),
+  WT01 = col_double(),                    # Fog
+  WT01_ATTRIBUTES = col_character(),
+  WT02 = col_double(),                    # Heavy Fog
+  WT02_ATTRIBUTES = col_character(),
+  WT03 = col_double(),                    # Thunder
+  WT03_ATTRIBUTES = col_character(),
+  WT04 = col_double(),                    # Sleet
+  WT04_ATTRIBUTES = col_character(),
+  WT06 = col_double(),                    # Glaze
+  WT06_ATTRIBUTES = col_character(),
+  WT08 = col_double(),                    # Smoke or haze
+  WT08_ATTRIBUTES = col_character(),
+  WT13 = col_double(),                    # Mist
+  WT13_ATTRIBUTES = col_character(),
+  WT14 = col_double(),                    # Drizzle
+  WT14_ATTRIBUTES = col_character(),
+  WT16 = col_double(),                    # Rain
+  WT16_ATTRIBUTES = col_character(),
+  WT18 = col_double(),                    # Snow      
+  WT18_ATTRIBUTES = col_character(),
+  WT19 = col_double(),                    # Unknown source of precipitation
+  WT19_ATTRIBUTES = col_character(),
+  WT22 = col_double(),                    # Ice fog
+  WT22_ATTRIBUTES = col_character()
+)
+
+
+
+# load all the daily weather data
+weather <- read_csv(weatherfile,col_types = weatherspec)
+
+#summary(weather)
+
+```
+
+
+```{r fix-weather-NAs, echo=F, warning=F, message=F}
+### Fix the factor items
+attribute_indexes <- names(weather) %>% grep("ATTRIBUTES",x = .)
+attribute_names <- names(weather)[attribute_indexes]
+for (atr in attribute_names) {
+  #print(paste("atr = ", atr))
+  #print(summary(weather[atr]))
+  weather[,atr]<-fct_explicit_na(f=pull(weather[atr]),na_level = ",,")
+  #print(summary(weather[atr]))
+  #print("______________________________")  
+}
+#print(summary(weather))
+
+### Fix the non-factor items by setting to 0
+
+non_attribute_indexes <- names(weather) %>% grep("ATTRIBUTES",x = .,invert = T)
+non_attribute_names <- names(weather)[non_attribute_indexes]
+for (atr in non_attribute_names) {
+  #print(paste("atr = ", atr))
+  #print(summary(weather[atr]))
+  weather[is.na(weather[,atr]),atr]=0
+  #print(summary(weather[atr]))
+  #print("______________________________")  
+}
+#print(summary(weather))
+
+
+```
+
+```{r drop-ATTR-columns, echo=F,message=F, warning=F}
+#### Drop ATTR columns from weather, as they are not useful (and cause factor headaches)
+attr_indexes <- names(weather) %>% grep("ATTR",x = .)
+attr_names <- names(weather)[attr_indexes]
+# protect against manually running more than once, because it would delete everything if you do
+if(length(attr_indexes)>0) {
+   weather <- weather[,-attr_indexes]
+   #summary(weather)
+   #dim(weather)
+   }
+```
+
+
+
+```{r drop-constant-columns, echo=F,message=F,warning=F}
+##### Drop constant columns:  "STATION"   "NAME"      "LATITUDE"  "LONGITUDE" "ELEVATION"
+##### Because all the weather data is from one station (Central Park) the values in these columns do not change.
+##### Thus, they are not useful for modeling
+##### They are the first 5 columns:
+  
+constant_columns=c("STATION",   "NAME",      "LATITUDE",  "LONGITUDE", "ELEVATION")
+#print("All same:")
+#summary(weather[,constant_columns])
+# guard against accidentally deleting too many columns
+if(all.equal(names(weather)[1:5],constant_columns)) {
+  weather <- weather[,-c(1:5)]
+  #summary(weather)
+  #dim(weather)
+}
+
+```
+
+
+
+
+
+```{r load-CB-data-file, echo=F,message=F,warning=F}
+#### Function to load up a CitiBike datafile
+read_CB_data_file = function(f){
+  Startloadtime = Sys.time()
+  #print(paste("reading data file   ", f, " at ", Startloadtime))
+  
+  ### Extract the year and month from the datafile.  Needed below for inconsistent date/time formats by month.
+  YYYYMM <- sub("^.*/","",f) %>% sub("-citibike-tripdata.csv","",.)
+  #print(paste("YYYYMM = ", YYYYMM))
+
+  
+  ### Read the datafile according to the format specifications
+  datafile = read_csv(f,skip = 1,
+#The column names have slight format differences across months.  So, replace all column names with these:
+                  col_names=c("trip_duration",            # in seconds
+                              "s_time",                   # start date/time
+                              "e_time",                   # end date/time
+                              "s_station_id",             # station ID for beginning of trip 
+                              "s_station_name", 
+                              "s_lat",                    # start station latitude
+                              "s_long",                   # start station longitude
+                              "e_station_id",             # station ID for end of trip
+                              "e_station_name",
+                              "e_lat",                    # latitude
+                              "e_long",                   # longitude
+                              "bike_id",                  # every bike has a 5-digit ID number
+                              "user_type",                # Annual Subscriber or Daily Customer
+                              "birth_year",               # Can infer age from this
+                              "gender")                   # 1=Male,2=Female,0=unknown
+#                  ,col_types = "dTTffddffddifif"    # d=decimal; T=datetime; f=factor; i=integer
+### specify the data type for each of the above columns
+### Note: because of changes in the format across months, we will  have to read the date/time as char for now
+### also we will have to read the birth_year as char for now because of missing data (either "\\N" or "NULL")
+                  ,col_types = "dccffddffddifcf"    # d=decimal; c=character; f=factor; i=integer
+                  )
+  Endloadtime = Sys.time()
+  #print(paste("done reading data file ",  f, " at ", Endloadtime))
+  Totalloadtime = round(Endloadtime - Startloadtime, 2)
+  #print(paste("Totaltime = ", Totalloadtime))
+  
+## Fix format changes on time and birth_year variables 
+  s_time <- pull(.data=datafile, var = "s_time")
+  e_time <- pull(.data=datafile, var = "e_time")
+  
+  ### Early and recent files use format "%Y-%m-%d %H:%M:%OS"
+  if (YYYYMM < "201409" | YYYYMM > "201609") timeformat="%Y-%m-%d %H:%M:%OS"
+
+  ### time between the months uses format "%m/%d/%Y %H:%M:%OS"
+  if (YYYYMM >= "201409" & YYYYMM <= "201609") timeformat="%m/%d/%Y %H:%M:%OS"
+  ### except for the first 3 months of 2015, time is only HH:MM -- no seconds!
+  if (YYYYMM >= "201501" & YYYYMM <= "201503") timeformat="%m/%d/%Y %H:%M"
+  ### Same for June 2015, time is only HH:MM -- no seconds!
+  if (YYYYMM == "201506") timeformat="%m/%d/%Y %H:%M"
+  
+  datafile[,"s_time"] <- as.POSIXct(s_time, format=timeformat)
+  datafile[,"e_time"] <- as.POSIXct(e_time, format=timeformat)
+
+#### note:  on the first Sunday of November, clocks move back 1 hour.
+#### This means that the hour 1am-2am EDT is followed by the hour 1am-2am EST.
+#### If a bicycle was rented during this hour "EDT",
+#### but returned during the subsequent hour "EST",
+#### then the trip duration could appear negative.
+#### This is because the default loader will assume all times on this date are EST.
+#### In this case, the below will force such start-times back an hour:
+  
+iii = which(datafile$s_time>datafile$e_time)
+if(length(iii)>0) {
+  #print("***DAYLIGHT SAVINGS PROBLEM***")
+  #print(datafile[iii,])
+  #print("**Start times:")
+  #print(pull(datafile[iii,2]))
+  #print(pull(datafile[iii,2]) %>% as.numeric())
+  #print(unclass(datafile[iii,2])$s_time)
+  #print("**End times:")
+  #print(pull(datafile[iii,3]))
+  #print(pull(datafile[iii,3]) %>% as.numeric())
+  #print(unclass(datafile[iii,3])$e_time)
+
+  
+  #print("***CHANGING s_time backward***")
+  new_s_time <- ifelse(datafile$s_time>datafile$e_time,
+                       datafile$s_time-60*60,  # pushes back 1 hour from EST to EDT 
+                       datafile$s_time) %>% as.POSIXct(., origin= "1970-01-01")
+  #print("***CHANGING e_time forward***")
+  new_e_time <- ifelse(datafile$s_time>datafile$e_time,
+                       datafile$e_time+60*60,  # pushes forward 1 hour from EDT to EST 
+                       datafile$e_time) %>% as.POSIXct(., origin= "1970-01-01")
+  before_diff <-  datafile[iii,3] - datafile[iii,2] 
+  #print(paste("BEFORE difference: ", before_diff))
+  
+  datafile[,"s_time"] <- new_s_time
+  datafile[,"e_time"] <- new_e_time
+  
+#print("**AFTER CHANGE**")
+  #print(datafile[iii,])
+  #print("**Start times**")
+  #print(pull(datafile[iii,2]))
+  #print(pull(datafile[iii,2]) %>% as.numeric())
+  #print(unclass(datafile[iii,2])$s_time)
+  #print("**End times**")
+  #print(pull(datafile[iii,3]))
+  #print(pull(datafile[iii,3]) %>% as.numeric())
+  #print(unclass(datafile[iii,3])$e_time)
+
+  after_diff <-  datafile[iii,3] - datafile[iii,2] 
+  #print(paste("AFTER difference: ", after_diff))
+    
+  
+  }  
+  
+##
+## set missing birth years to NA  
+  birth_year <- pull(.data=datafile, var = "birth_year")
+## Fix missing birth year on early data (occurs when YYYYMM < "201409")
+  birth_year[birth_year=='\\N']<-NA
+## Fix missing birth year on 2017 (occurs when "201704" YYYYMM < "201712")
+  birth_year[birth_year=='NULL']<-NA
+## Convert the available birth_years to their integer equivalents (while retaining above NAs)
+  datafile[,"birth_year"] <- as.integer(birth_year)
+
+## There are numerous cases between 201610 and 201703 where the usertype is not specified.
+## (It should be "Subscriber" or "Customer", but in such cases it is blank.)  
+## We will set it to "UNKNOWN"  
+  
+#library(forcats)   # loaded above
+  datafile$user_type<-fct_explicit_na(datafile$user_type, "UNKNOWN")
+
+## There was a trial of DOCKLESS BIKES in the Bronx starting from August 2018:
+## https://nyc.streetsblog.org/2018/08/16/a-hit-and-miss-debut-for-dockless-citi-bikes-in-the-bronx/
+## https://d21xlh2maitm24.cloudfront.net/nyc/bronx-service-area-map.png?mtime=20180809110452
+## https://webcache.googleusercontent.com/search?q=cache:9Xz02WSdeOYJ:https://www.citibikenyc.com/how-it-works/dockless-faqs+
+  
+## For these trips, the latitute and longitude of the bike start and stop is given, but
+## the start and end station ID and station name are set to "NULL" in the input datafiles.
+## For clarity, we will change such station_id values to 0 and station_name values to "DOCKLESS" :
+  levels(datafile$s_station_id)[levels(datafile$s_station_id)=="NULL"] <- 0
+  levels(datafile$s_station_name)[levels(datafile$s_station_name)=="NULL"] <- "DOCKLESS"
+  levels(datafile$e_station_id)[levels(datafile$e_station_id)=="NULL"] <- 0
+  levels(datafile$e_station_name)[levels(datafile$e_station_name)=="NULL"] <- "DOCKLESS"
+          
+  
+## for certain months, the datafile is not sorted on s_time (instead it is sorted on s_station_id then s_time)
+## ensure that this month's data is sorted on s_time
+  #datafile <- datafile[order(datafile$s_time),]
+  return(datafile)
+}
+
+
+### November 1, 2015
+#read_CB_data_file(filenames[29])
+
+### November 6, 2016
+#read_CB_data_file(filenames[41])
+
+
+
+```
+
+```{r list-CitiBike-data, echo=F,warning=F,message=F}
+#### List the names of available CitiBike data files
+
+filenames=list.files(path=slimdatadir,pattern = '.csv$', full.names = T)    # ending with .csv ; not .zip
+#length(filenames)
+#t(t(filenames))
+
+```
+
+
+```{r load-up-data-files, echo=F,warning=F,message=F}
+#### Load up data file or files
+#### Load all the data files, noting how much time it takes to load them
+
+Starttime = Sys.time()
+#print(paste("Start time: ", Starttime))
+
+### loads up the data for all files -- problem is too much data for my computer to handle if all are loaded
+#print("About to load multiple datafiles:")
+
+#suppress listing
+#print(filenames)
+
+
+# call read_CB_data_files to load the files specified
+CB <- do.call(rbind,lapply(filenames,read_CB_data_file))
+
+
+
+### Problem:  loading up multiple files is too much for my computer to handle !!!!
+
+
+
+### load up just a single month of data ("filename")
+#### Look at just June 2019
+##filename = filenames[6]
+##print(paste("Loading data for ", filename))
+##CB <- read_CB_data_file(filename)
+
+Endtime = Sys.time()
+#print(paste("End time: ", Endtime))
+Totaltime = round(Endtime - Starttime,2)
+#print(paste("Totaltime for loading above file(s) = ", Totaltime))
+
+## Save a copy of the loaded data, in case we need it during manipulations below
+save_CB <- CB
+```
+
+```{r glimpse, echo=FALSE, message=FALSE, warning=FALSE}
+#### `glimpse` the dataset
+#glimpse(CB)
+```
+
+```{r structure, echo=F,message=F,warning=F}
+#### `str` - structure of the dataset
+#str(CB)
+```
+
+```{r summary, echo=F,warning=F,message=F}
+#### Summary of the CitiBike dataset
+#summary(CB)
+```
+
+
+
+```{r missing-values, echo=FALSE, message=F,warning=F}
+### **Check for missing values**
+
+#### Let's check whether any variables have missing values, i.e., values which are NULL or NA.
+
+miss.cols = apply(CB, 2, function(x) any(is.na(x)))
+#print(paste("Number of columns with missing values = ", length(names(miss.cols[miss.cols==TRUE]))))
+#print(paste("Names of columns with missing values = ", paste(names(miss.cols[miss.cols==TRUE]), collapse = ', ')))
+#print(paste("Number of rows missing birth_year: ", sum(is.na(CB$birth_year))))      
+```
+
+
+
+\newpage
+
+## Description of Data    
+
+In this section, we examine selected individual variables from the CitiBike and Weather datasets.  These items require transformation and/or cleaning as there are missing values or outliers which impede analysis otherwise.  The detailed data fields tables for weather and CitiBike can be found in the Appendix.
+
+#### Examine variable **trip_duration**:    
+
+The trip_duration is specified in seconds, but there are some outliers which may be incorrect, as the value for Max is quite high:  `r summary(CB$trip_duration)["Max."]` seconds, or `r summary(CB$trip_duration)["Max."]/60/60/24` days.  We can assume that this data is bad, as nobody would willingly rent a bicycle for this period of time, given the fees that would be charged.  Here is a histogram of the original data distribution:
+
+```{r trip-duration, echo=F, warning=F, message=F}
+#### Histogram of trip_duration, log(trip_duration)
+
+#summary(CB$trip_duration)
+par(mfrow=c(2,1))
+hist(CB$trip_duration,col='lightgreen', breaks=100, 
+     main = "Histogram of trip_duration before adjustments",
+     xlab="trip_duration (in seconds)")
+hist(log(CB$trip_duration),col='lightblue', breaks=100,
+     main = "Histogram of log(trip_duration) before adjustments",
+     xlab="log(trip_duration) (in seconds)")
+```
+
+
+
+```{r trip-duration-units-before-truncation, echo=F,message=F,warning=F}
+#### Summary of trip durations before censoring/truncation:
+#express trip duration in seconds, minutes, hours, days
+# note: we needed to fix the November daylight savings problem to eliminate negative trip times
+
+#### Supplied seconds
+supplied_secs<-summary(CB$trip_duration)
+
+#### Seconds
+CB$trip_duration_s = as.numeric(CB$e_time - CB$s_time,"secs")
+calc_secs<-summary(CB$trip_duration_s)
+
+#### Minutes
+CB$trip_duration_m = as.numeric(CB$e_time - CB$s_time,"mins")
+calc_mins<-summary(CB$trip_duration_m)
+
+#### Hours
+CB$trip_duration_h = as.numeric(CB$e_time - CB$s_time,"hours")
+calc_hours<-summary(CB$trip_duration_h)
+
+#### Days
+CB$trip_duration_d = as.numeric(CB$e_time - CB$s_time,"days")
+calc_days <-summary(CB$trip_duration_d)
+
+# library(kableExtra) # loaded above
+rbind(supplied_secs, calc_secs, calc_mins, calc_hours, calc_days) %>% 
+  kable(caption = "Summary of Trip durations before truncation") %>%
+  kable_styling(c("bordered","striped"),latex_options =  "hold_position")
+```
+
+The above indicates that the duration of the trips (in seconds) includes values in the millions -- which likely reflects a trip which failed to be properly closed out.
+
+\newpage
+#### Delete cases with unreasonable trip_duration values
+Let's assume that nobody would rent a bicycle for more than a specified timelimit (say, 3 hours), and drop any records which exceed this:
+
+```{r drop-long-trips, echo=F,warning=F, message=F}
+total_rows=dim(CB)[1]
+#print(paste("Initial number of trips: ", total_rows))
+
+# choose only trips that were at most 3 hrs, as longer trips may reflect an error
+# remove long trips from the data set -- something may be wrong (e.g., the system failed to properly record the return of a bike)
+longtripthreshold_s = 60 * 60 *3  # 10800 seconds = 180 minutes = 3 hours
+longtripthreshold_m = longtripthreshold_s / 60
+longtripthreshold_h = longtripthreshold_m / 60
+
+long_trips <- CB %>% filter(trip_duration_s > longtripthreshold_s)
+num_long_trips_removed = dim(long_trips)[1]
+pct_long_trips_removed = round(100*num_long_trips_removed / total_rows, 3)
+
+CB <- CB %>% filter(trip_duration <= longtripthreshold_s)
+reduced_rows = dim(CB)[1]
+
+print(paste0("Removed ", num_long_trips_removed, " trips (", pct_long_trips_removed, "%) of longer than ", longtripthreshold_h, " hours."))
+print(paste0("Remaining number of trips: ", reduced_rows))
+
+par(mfrow=c(2,1))
+hist(CB$trip_duration,col='lightgreen', breaks=100,
+     main = "Histogram of trip_duration AFTER adjustments",
+     xlab="trip_duration (in seconds)")
+
+hist(log(CB$trip_duration),col='lightblue', breaks=100,
+     main = "Histogram of log(trip_duration) before adjustments",
+     xlab="log(trip_duration, in seconds)")
+
+
+```
+
+
+\newpage
+#### Examine birth_year
+
+Other inconsistencies concern the collection of birth_year, from which we can infer the age of the participant.  There are some months in which this value is omitted, while there are other months in which all values are populated.  However, there are a few records which suggest that the rider is a centenarian -- it seems highly implausible that someone born in the 1880s is cycling around Central Park -- but the data does have such anomalies.  Thus, a substantial amount of time was needed for detecting and cleaning such inconsistencies.
+
+The birth year for some users is as old as `r summary(CB$birth_year)["Min."]`, which is not possible:
+
+```{r birth-year, echo=F,message=F,warn=F}
+summary(CB$birth_year)
+hist(CB$birth_year, col="lightgreen", main="Histogram of birth_year")
+# Deduce age from trip date and birth year
+#library(lubridate) #loaded above
+CB$age <- year(CB$s_time) - CB$birth_year
+
+par(mfrow=c(1,2))
+hist(CB$age, col="lightblue",  
+     main="Histogram of inferred Age",
+     xlab="User Age, inferred from birth year")
+hist(log(CB$age), col="lightblue",  
+     main="Histogram of log(inferred Age)",
+     xlab="log(User Age, inferred from birth year)")
+
+```
+
+\newpage
+#### Remove trips associated with very old users (age>90)
+#### (Also: remove trips associated with missing birth_year)  
+
+```{r age-and-birth-year, echo=F,message=F,warning=F}
+
+# choose only trips where the user was born after a certain year,  as older users may reflect an error
+age_threshhold = 90
+aged_trips <- CB %>% filter(age > age_threshhold)
+num_aged_trips_removed = dim(aged_trips)[1]
+pct_aged_trips_removed = round(100*num_aged_trips_removed / total_rows, 3)
+
+unknown_age_trips <- CB %>% filter(is.na(age))
+num_unknown_age_trips_removed = dim(unknown_age_trips)[1]
+pct_unknown_age_trips_removed = round(100*num_unknown_age_trips_removed / total_rows, 3)
+
+print(paste0("Removed ", num_aged_trips_removed, " trips (", pct_aged_trips_removed, "%) of users older than ", age_threshhold, " years."))
+
+print(paste0("Removed ", num_unknown_age_trips_removed, " trips (", pct_unknown_age_trips_removed, "%) of users where age is unknown (birth_year unspecified)."))
+
+CB <- CB %>% filter(age <= age_threshhold)
+reduced_rows = dim(CB)[1]
+print(paste0("Remaining number of trips: ", reduced_rows))
+
+par(mfrow=c(1,2))
+hist(CB$age, col="lightgreen",  main="Age, after deletions",
+     xlab="User Age, inferred from birth year")
+hist(log(CB$age), col="lightgreen",  main="log(Age), after deletions",
+     xlab="log(User Age, inferred from birth year)")
+```
+
+\newpage
+#### Compute distance between start and end stations 
+
+This is straight-line distance between (longitude,latitude) points -- it doesn't incorporate an actual bicycle route.   
+There are services (e.g., from Google) which can compute and measure a recommended bicycle route between points, but use of such services requires a subscription and incurs a cost.
+
+```{r get-distance, echo=F,message=F,warning=F}
+# Compute the distance between start and end stations
+s_lat_long <- CB %>% select(c(s_lat,s_long)) %>%  as.matrix
+e_lat_long <- CB %>% select(c(e_lat,e_long)) %>%  as.matrix
+#library(sp) # loaded above
+CB$distance_km <- spDists(s_lat_long, e_lat_long, longlat=T, diagonal = TRUE)
+summary(CB$distance_km)
+maxdistance = summary(CB$distance_km)["Max."]
+hist(CB$distance_km, breaks=30, col="orange", 
+     main="histogram of estimated travel distance (in km)")
+```
+
+In this subset of the data, the maximum distance between stations is `r maxdistance` km.  In the data there are some stations for which the latitude and longitude are zero, which suggests that the distance between such a station and an actual station is many thousands of miles.  If such items exist, we will delete them:
+
+#### Delete unusually long distances
+
+```{r delete-long-distances,  echo=F,message=F,warning=F}
+### long distances?
+long_distances <- CB %>% filter(distance_km>50)
+
+if (dim(long_distances)[1]>0) {
+print(paste("Dropping ", dim(long_distances)[1], " trips because of unreasonably long distance travelled"))
+    print(t(long_distances))
+  
+### These items have a station where latitude and longitude are zero.
+### Drop them:
+
+  CB <- CB %>% filter(distance_km<50)
+
+  summary(CB$distance_km)
+  hist(CB$distance_km, breaks=30, col="lightgreen", main="Histogram of distance_km after dropping problem trips")
+} else {print("No unusually long distances were found in this subset of the data.")}
+
+```
+
+
+\newpage
+#### Compute usage fee
+
+There is a time-based usage fee for rides longer than an initial period:
+
+* For **user_type=Subscriber**, the fee is **$2.50 per 15 minutes** following an initial free 45 minutes per ride.
+* For **user_type=Customer**, the fee is **$4.00 per 15 minutes** following an initial free 30 minutes per ride.
+* There are some cases where the user type is not specified (we have relabeled as "UNKNOWN", and we do note estimate usage fees for such trips.)
+
+
+
+```{r get_trip-fee, echo=F,warning=F,message=F}
+
+CB$trip_fee <- 0
+CB$trip_fee[CB$user_type=="Subscriber"] <- 2.50 * (ceiling(
+  CB$trip_duration_m[CB$user_type=="Subscriber"]  / 15)-3)  # first 45 minutes are free
+CB$trip_fee[CB$user_type=="Customer"]   <- 4.00 * (ceiling(
+  CB$trip_duration_m[CB$user_type=="Customer"]  / 15)-2)  # first 30 minutes are free
+CB$trip_fee[CB$user_type=="UNKNOWN"] <- 0   # we don't know the fee structure for "UNKNOWN", so assume zero
+CB$trip_fee[CB$trip_fee<0] <- 0   # fee is non-negative
+
+#summary(CB$trip_fee)
+#print("Table of trip_fee:")
+#table(CB$trip_fee,dnn="Fee Amount")  %>% 
+#  kable(caption="Table of trip_fees:") %>% 
+#  kable_styling(c("bordered","striped"),latex_options =  "hold_position")
+
+par(mfrow=c(1,2))
+hist(CB$trip_fee,breaks=40,col="yellow", 
+     main="Histogram of trip_fee (most trips incur no fee)")
+hist(CB$trip_fee[CB$trip_fee>0],breaks=32,col="lightgreen",
+     main = "Histogram of trip_fee excluding zeros (leftmost bar = $2.50)")
+
+```
+
+
+
+\newpage
+#### Summary of trip durations AFTER censoring/truncation:     
+     
+After we eliminate cases which result in extreme values, the duration of the remaining trips is more reasonable.
+
+```{r trip-duration-units-after-censor-truncate, echo=F,message=F,warning=F}
+#express trip duration in seconds, minutes, hours, days
+# note: we needed to fix the November daylight savings problem to eliminate negative trip times
+
+#### Supplied seconds
+#print("Supplied Seconds:")
+supplied_secs<-summary(CB$trip_duration)
+
+#### Seconds
+CB$trip_duration_s = as.numeric(CB$e_time - CB$s_time,"secs")
+calc_secs<-summary(CB$trip_duration_s)
+
+#### Minutes
+CB$trip_duration_m = as.numeric(CB$e_time - CB$s_time,"mins")
+calc_mins<-summary(CB$trip_duration_m)
+
+#### Hours
+CB$trip_duration_h = as.numeric(CB$e_time - CB$s_time,"hours")
+calc_hours<-summary(CB$trip_duration_h)
+
+#### Days
+CB$trip_duration_d = as.numeric(CB$e_time - CB$s_time,"days")
+calc_days <-summary(CB$trip_duration_d)
+
+# library(kableExtra) # loaded above
+rbind(supplied_secs, calc_secs, calc_mins, calc_hours, calc_days) %>% 
+  kable(caption = "Summary of trip durations AFTER truncations:") %>% 
+  kable_styling(c("bordered","striped"),latex_options =  "hold_position")
+```
+
+We could have chosen to ***censor*** the data, in which case we would not drop observations, but would instead move them to a limiting value, such as three hours (for trip time) or an age of 90 years (for adjusting birth_year).  
+As there were few such cases, we instead decided to ***truncate*** the data by dropping such observations from the dataset.
+
+#### Limitations and Challenges in uploading and analyzing this data
+
+##### Data Size
+
+Because there is so much data, it is difficult to analyze the entire universe of trip-by-trip data unless one has high-performance computational resources.
+
+##### Data formatting inconsistencies from month to month:
+
+* Data column names change slightly from month to month.
+* In some months, CitiBike specifies dates as YYYY-MM-DD, while in other months, dates are MM/DD/YYYY .  
+* In certain months, the timestamps include HH:MM:SS (as well as fractional seconds) while in other months, timestamps only include HH:MM , as seconds are omitted entirely.  
+* We encountered an unusual quirk which manifests itself just once a year, on the first Sunday of November, when clocks are rolled back an hour as Daylight Savings time changes to Standard time:  
+  + The files do not specify whether a timestamp is EDT or EST.  On any other date, this is not a problem, but the hour of 1am-2am EDT on that November Sunday is followed by an hour 1am-2am EST.
+  + If someone rents a bike at, say, 1:55am EDT (before the time change) and then returns it 15 minutes later, the time is now 1:10am (EST).  
+  + The difference in time timestamps suggests that the rental was negative 45 minutes, which is of course impossible!
+* Sometimes there is an unusually long interval between the start time of a bicycle rental and the time at which the system registers such rental as having concluded.
+
+
+```{r CBlite, echo=F, message=F, warning=F}
+#### Make a smaller dataset, numeric, without multicollinearities, for correlation calculations
+# extract selected fields
+CBlite  <- select(CB, c(trip_duration, trip_fee, distance_km, 
+                        s_station_id, s_lat, s_long,
+                        e_station_id, e_lat, e_long,
+                        user_type, gender, age))
+
+#make numeric variables
+CBlite$user_type <- as.integer(CBlite$user_type)
+CBlite$gender <- as.integer(CBlite$gender)
+
+# function to revert factor back to its numeric levels
+as.numeric.factor <- function(x) {as.numeric(levels(x))[x]}
+
+CBlite$s_station_id <- as.numeric.factor(CBlite$s_station_id)
+CBlite$e_station_id <- as.numeric.factor(CBlite$e_station_id)
+```
+
+
+\newpage
+#### Correlations of individual trip data features
+
+We can examine the correlations between variables to understand the relationship between variables, and also to help be alert to potential problems of multicollinearity.  Here we compute rank correlations (Pearson and Spearman) as well as actual correlations between key variables.   Here we compute the correlations between key variables on the individual CitiBike Trip data.  (Later we will compute correlations on daily aggregated data which has been joined with the daily weather observations.)
+
+```{r compute-correl-by-ride, echo=F, message=F, warning=F}
+#### compute correlations
+#library(Hmisc) #loaded above
+#library(corrplot) # loaded above
+
+res2<-rcorr(as.matrix(CBlite))
+respearson=rcorr(as.matrix(CBlite),type = "pearson")
+resspearman=rcorr(as.matrix(CBlite),type = "spearman")
+res3 <- cor(as.matrix(CBlite))
+```
+
+
+```{r pearson-rank-correl-by-ride, fig.width = 8, fig.height=8, echo=F,message=F,warning=F}
+#### Pearson rank correlation
+  corrplot::corrplot(corr = respearson$r, type = "upper", outline = T, order="original", 
+           p.mat = respearson$P, sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nRank Correlation (Pearson) on individual trip data",
+           number.cex = 1.1, number.font = 2, number.digits = 2 )
+```
+
+
+```{r spearman-rank-correl-by-ride, fig.width = 8, fig.height=8, echo=F,message=F,warning=F}
+#### Spearman rank correlation
+  corrplot::corrplot(corr = resspearman$r, type = "upper", outline = T,  order="hclust", 
+           p.mat = resspearman$P, sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nRank Correlation (Spearman) on individual trip data",
+           number.cex = 0.9, number.font = 1, number.digits = 2)
+```
+
+```{r act-correlations-by-ride, echo=FALSE, fig.width = 10, fig.height=10}
+#### actual correlations (not rank correlations)
+  corrplot(corr = res3, type = "upper", outline = T,  order="hclust", 
+           sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nActual correlations on individual trip data",
+           number.cex = 1.4, number.font = 1, number.digits = 2 )
+```
+
+\newpage
+### Aggregate and join 
+
+#### Aggregate individual CitiBike trip data by day, and join to daily weather data
+
+We will perform our calculations on an aggregated basis. We will group each day's rides together, but we will segment by user_type ("Subscriber" or "Customer") and by gender ("Male or "Female").  For each of these segments, there are some cases where the user_type is not specified, so we have designated that as "Unknown."  For gender, there are cases where the CitiBike data set contains a zero, which indicates that the gender of the user was not recorded.  
+
+For each day, we will aggregate the following items across each of the above groupings:
+
+* mean trip_duration
+* median trip_duration
+* sum of distance_km
+* sum of trip_fee
+* mean of age
+* count of number of trips on that day
+
+We will split the aggregated data into a training dataset, consisting of all (grouped, daily) aggregations from 2013-2018, and a test dataset, consisting of (grouped, daily) aggregations from 2019.
+
+We will then join each aggregated CitiBike data element with the corresponding weather obserservation for that date.
+
+```{r make-train-and-test-datasets, echo=F,message=F,warning=F}
+
+#summary(CB)
+
+##CB$user_type[is.na(CB$user_type)] <- "UNKNOWN"    ## should  not be necessary to do this
+CB$gender <- recode_factor(CB$gender, '1' = "Male", '2' = "Female", '0' = "UNKNOWN")
+
+# make the training data set
+train <- CB %>% 
+              mutate(start_date = as.Date(s_time, format="%Y-%m-%d"),
+#                     user_type = as.character(user_type),
+                     train = 1) %>%
+              filter(start_date < '2019-01-01') %>%
+              group_by(start_date, user_type, train, gender) %>%
+              summarise(
+                mean_duration = mean(trip_duration), 
+                median_duration = median(trip_duration),
+                sum_distance_km = sum(distance_km),
+                sum_trip_fee = sum(trip_fee),
+                avg_age = mean(age),
+                trips = n()
+              ) %>%
+              ungroup()
+
+train_rows = dim(train)[1]
+#summary(train)
+
+# make the test data set
+test <- CB %>% 
+              mutate(start_date = as.Date(s_time, format="%Y-%m-%d"),
+#                     user_type = as.character(user_type),
+                     train = 0) %>%
+              filter(start_date >= '2019-01-01') %>%
+              group_by(start_date, user_type, train, gender) %>%
+              summarise(
+                mean_duration = mean(trip_duration), 
+                median_duration = median(trip_duration),
+                sum_distance_km = sum(distance_km),
+                sum_trip_fee = sum(trip_fee),
+                avg_age = mean(age),
+                trips = n()
+              ) %>%
+              ungroup()
+test_rows = dim(test)[1]
+
+
+# Join train with weather data (there should be no rows with missing values)
+train_weather <- weather %>% inner_join(train, by = c("DATE" = "start_date" ))
+#dim(train_weather)
+
+# Join test with weather data (there should be no rows with missing values)
+test_weather <- weather %>% inner_join(test, by = c("DATE" = "start_date" )) 
+
+#dim(test_weather)
+```
+
+There are `r train_rows` rows of daily aggregated data in the training dataset, and `r test_rows` rows in the corresponding test dataset.
+
+\newpage
+### Selection of variables designated as "Important" by the Boruta algorithm
+
+There is a random-forest based algorithm known as "Boruta" which is useful in assessing whether each variable's "importance" in estimation of the target variable is "Confirmed", "Tentative", or "Rejected."   Here we execute the Boruta algorithm on the training dataset, which consists of aggregated daily ride metrics (from the CitiBike dataset) joined with daily weather observation metrics.
+
+The graph from the Boruta algoritm indicates the variables confirmed as important in green (on the right) while rejected variables are in red (on the left.)  The variables in the middle (in yellow) are "tentative."
+
+```{r Boruta-variable-selection, echo=FALSE, fig.height=10, fig.width=8, message=FALSE, warning=FALSE, eval=T}
+library(Boruta)
+# library(kableExtra) # loaded above
+set.seed(777)
+num_cols <- length(names(train_weather))
+
+#### suppressed because it is very time consuming to run each time.  
+#### The result is the list of "important" variables, which was copied and hard-coded
+borutaOutput <- Boruta(trips ~ ., train_weather)
+#print(borutaOutput)
+plot(borutaOutput,  cex.axis=0.75, las=2, main="Boruta algorithm for Feature Selection", xlab="")
+
+# Here is the Confirmed/Tentative/Rejected Borua decision:
+BorutaFinal       <- borutaOutput$finalDecision
+#BorutaFinal
+
+# Here is the alphabetized list of Boruta decision:
+BorutaFinalAlpha  <- BorutaFinal[order(names(BorutaFinal))] %>% t %>% t
+#BorutaFinalAlpha
+
+# Extract the numerical median results from the Boruta algorithm
+BorutaMedian      <- apply(X = borutaOutput$ImpHistory, MARGIN = 2, FUN = median)
+
+# drop the three "shadow" variables from the list (shadowMax,shadowMean,shadowMin)
+BorutaMedian      <- BorutaMedian[BorutaMedian %>% names %>% grep("shadow",.,invert=T)]
+
+# alphabetize the list
+BorutaMedianAlpha <- BorutaMedian[order(names(BorutaMedian))]
+BorutaMedianAlphaNum <- as.numeric(BorutaMedianAlpha)
+
+BorutaMedianAlpha <- BorutaMedian[order(names(BorutaMedian))] %>% t %>% t
+
+BorutaJoinedAlpha <- cbind(BorutaFinalAlpha,BorutaMedianAlpha)
+
+BorutaFinalAlphaResults <- as.character(BorutaFinalAlpha)
+BorutaFinalAlphaNames <- BorutaFinal[names(BorutaFinal) %>% order] %>% names()
+
+# Here's the alphabetical list of the Boruta results:
+BorutaByAlpha <- cbind(BorutaFinalAlphaNames,BorutaFinalAlphaResults,BorutaMedianAlphaNum)
+#BorutaByAlpha %>% kable(caption="Alphabetical Boruta Results") %>% 
+#  kable_styling(c("bordered","striped"),
+#                full_width = F,
+#                latex_options =  "hold_position")
+
+# Here's the numerical list of the Boruta results (based upon median)
+BorutaByNum <- BorutaByAlpha[order(BorutaMedianAlphaNum),]
+BorutaByNum %>% kable(caption="Boruta results sorted by median value") %>% 
+  kable_styling(c("bordered","striped"),
+                full_width = F,
+                latex_options =  "hold_position")
+
+#plot(borutaOutput)
+#plot(borutaOutput, sort=FALSE)
+lz<-lapply(1:ncol(borutaOutput$ImpHistory),function(i) borutaOutput$ImpHistory[is.finite(borutaOutput$ImpHistory[,i]),i])
+names(lz) <- colnames(borutaOutput$ImpHistory)
+Labels <- sort(sapply(lz,median))
+
+#plot(borutaOutput, xlab = "", xaxt = "n")
+#axis(side = 1,las=2,labels = names(Labels), at = 1:ncol(borutaOutput$ImpHistory), cex.axis = 0.7)
+
+final.boruta <- TentativeRoughFix(borutaOutput)
+important <- getSelectedAttributes(final.boruta, withTentative = F)
+
+### drop sum_distance_km -- the correlation between this variable and the count of trips is 97 percent, so we cannot use it for prediction, as it is strongly driven by the number of trips
+important <- important[important!="sum_distance_km"]
+
+print(paste("Num important: ", length(important)))
+```
+
+```{r boruta-selection-columns, echo=F, message=F, warning=F}
+# load important variables
+# ### Because Boruta can take a very long time to run, we hard-coded the "important" results from a previous run here:
+# 
+# 
+# important <-  c(
+# "DATE"           ,
+# "AWND"           ,
+# "PRCP"           ,
+# "SNOW"           ,
+# "SNWD"           ,
+# "TMAX"           ,
+# "TMIN"           ,
+# "WDF2"           ,
+# "WDF5"           ,
+# "WSF2"           ,
+# "WSF5"           ,
+# "WT01"           ,
+# "WT02"           ,
+# "user_type"      ,
+# "gender"         ,
+# "mean_duration"  ,
+# "median_duration",
+# ##"sum_distance_km",  ## This has 0.97 correlation with number of trips -- not fair to use for prediction
+# "sum_trip_fee"   ,
+# "avg_age"
+# )
+
+impF <- important
+train.df <- train_weather %>% select(c("trips", impF))
+# we will include "trips" for now but remove it below
+test.df <- test_weather %>% select(c("trips", impF))
+
+### glm model
+#summary(train.df)
+
+```
+
+\newpage
+#### Correlations of daily-aggregated variables
+
+Having aggregated the CitiBike data into daily summarizations, and joined with Weather data, we compute the correlations of the features in the the training dataset.
+
+```{r chunk24x-compute-correl-daily-agg,eval=T,echo=F,warning=F,message=F}
+
+### Make numeric version of training dataset
+train.df.numerics <- train.df %>% select(-c(user_type,gender)) %>% mutate(DATE=as.numeric(DATE))
+
+#### compute correlations
+#library(Hmisc) #loaded above
+#library(corrplot) # loaded above
+res2x<-rcorr(as.matrix(train.df.numerics))
+respearsonx=rcorr(as.matrix(train.df.numerics),type = "pearson")
+resspearmanx=rcorr(as.matrix(train.df.numerics),type = "spearman")
+res3x <- cor(as.matrix(train.df.numerics))
+```
+
+
+```{r chunk25x-pearson-rank-correl-daily-agg, fig.width =10, fig.height=10, eval=T,echo=F,warning=F,message=F}
+#### Pearson rank correlation
+  corrplot::corrplot(corr = respearsonx$r, type = "upper", outline = T, order="original", 
+           p.mat = respearsonx$P, sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nRank Correlation (Pearson) on daily aggregated data",
+           number.cex = 0.9, number.font = 2, number.digits = 2 )
+```
+
+
+```{r chunk26x-spearman-rank-correl-daily-agg, fig.width = 12, fig.height=12, eval=T,echo=F,warning=F,message=F}
+#### Spearman rank correlation of daily aggregated data
+  corrplot::corrplot(corr = resspearmanx$r, type = "upper", outline = T,  order="hclust", 
+           p.mat = resspearmanx$P, sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nRank Correlation (Spearman) on daily aggregated data",
+           number.cex = 0.9, number.font = 1, number.digits = 2)
+```
+
+```{r chunk27x-act-correlations-daily-agg, echo=FALSE, fig.width = 12, fig.height=12 ,eval=T,echo=F,warning=F,message=F}
+#### actual correlations on daily aggregated data
+  corrplot(corr = res3x, type = "upper", outline = T,  order="hclust", 
+           sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nActual correlations on daily aggregated data)",
+           number.cex = 1, number.font = 1, number.digits = 2 )
+```
+
+
+
+
+
+
+
+<!--
+#### A complete description of the desired output    
+
+* Data Analysis    
+
+* Describe the instrumentation    
+
+* Describe the analysis plan    
+
+* Describe the scope and limitations of the methodology    
+
+
+
+- The data-set is currently composed of XXXXX records and VVV variables. 
+
+- Comment on missing values
+
+- Comment on cleanup
+
+
+
+
+In order to obtain the maximum information possible, we had to discard the use of many variables and put our focus into the following variables:
+
+-->
+
+\newpage
+## Experimentation and Results 
+
+### Build Models
+
+We will create various models to estimate the total number of trips per day within each category.   
+We know the actual results (number of trips) in the sampled subset, but we will pull out this column from the test dataset and save into a separate variable for RMSE calculations afterwards.
+
+```{r target-trips, echo=F, message=F, warning=F}
+##### set up test variable trips
+###### only run this once...
+if (!exists("test.values")) {
+  # pull the TARGET variable out from the test dataframe, and save it for RMSE calculations
+  test.values <- test.df$trips
+  # delete the value from the test dataframe
+  test.df$trips <- NULL
+} 
+```
+
+
+We will fit standard linear models -- both linear and loglinear -- using a variety of variables.
+Then we will fit several geneneralized linear models: Poisson and Gaussian.
+
+The quality of the fit from each model will be assessed using the RMSE calcualtion.
+
+## Standard linear models
+
+We will create models using a selection of "important" variables from the Boruta algorithm.  At first we will exclude the data, then we will create another model which includes it. Finally we will create a third model which drops those variables deemed not statistically significant.
+
+Because the standard linear model creates predictions which could be negative, we will also estimate a corresponding log-linear model for each of the above models.  We will fit log(trips) rather than trips, which will yield a fitted result in log-space.  We must then exponentiate the predictions returned by such model in order to get the estimated trip counts.
+
+```{r linear-models, echo=F, message=F, warning=F}
+# use Sachid's RMSE function
+model.fit.evaluate.rmse <- function(model, test.data, test.values) {
+output = predict(model, test.data)
+rmse = round(sqrt(sum((output - test.values)^2)/length(test.values)), digits =2)
+return(rmse)
+}
+
+### evaluation where predicted variable in the model is log(y) ~ dependent variables
+model.fit.evaluate.rmse.log <- function(model, test.data, test.values) {
+output = exp(predict(model, test.data))
+rmse = round(sqrt(sum((output - test.values)^2)/length(test.values)), digits =2)
+return(rmse)
+}
+```
+
+### linear model 1 - without DATE variable
+
+The following variables will be included in this model:
+
+* gender
+* user_type
+* avg_age
+* AWND - Average Daily Wind Speed
+* PRCP - Daily Precipitation amount
+* SNOW - amount of snowfall
+* SNWD - depth of snow on the ground
+* TMAX - daily Maximum temperature
+* TMIN - daily Minimum temperature
+* WDF2 - direction of strongest 2-minute wind gust
+* WDF5 - direction of strongest 5-second wind gust
+* WSF5 - speed of biggest 5-second wind gust
+* WT01 - indicator for fog today
+* WT02 - indicator for heavy fog today
+
+The full regression output can be found in the appendix.
+
+```{r linear-model-1, echo=F, message=F, warning=F}
+
+lm.1 <- lm(trips ~  gender+user_type+avg_age+AWND+PRCP+SNOW+SNWD
+                    +TMAX+TMIN+WDF2+WDF5+WSF2+WSF5+WT01+WT02, 
+                    data=train.df)
+#summary(lm.1)   # defer display to appendix
+rmse.nb1 = model.fit.evaluate.rmse(lm.1, test.df, test.values)
+output1=predict(lm.1,test.df)
+#summary(output1)
+#summary(test.values)
+lm.1.summaries <- rbind(predicted=summary(output1),actual=summary(test.values))
+lm.1.main <-  "Linear Model 1 vs. actual"
+lm.1.summaries %>% 
+  kable(caption = lm.1.main) %>%
+  kable_styling(c("bordered","shaded"),latex_options =  "hold_position")
+#plot(output1~test.values)
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+# Compute RMSE
+print(paste("lm.1 RMSE:", rmse.nb1))   # defer display
+#plot(lm.1)
+x1=data.frame(actual=test.values,predicted=output1)
+library(reshape)
+x1melt=melt(x1)
+ggplot(data = x1melt,aes(x=value, fill=variable)) + 
+  geom_density(alpha=0.25) + ggtitle(lm.1.main) 
+
+```
+
+This is not a very good model.
+
+
+\newpage
+### LOG linear model 1a - without DATE variable
+
+This is the same as the above model, except the dependent variable is log(trips) rather than trips)
+
+The full regression output can be found in the appendix.
+
+```{r linear-model-1a, echo=F, message=F, warning=F}
+
+lm.1a <- lm(log(trips) ~  gender+user_type+avg_age+AWND+PRCP+SNOW+SNWD
+                    +TMAX+TMIN+WDF2+WDF5+WSF2+WSF5+WT01+WT02, 
+                    data=train.df)
+#summary(lm.1a) # defer display
+rmse.nb1a = model.fit.evaluate.rmse.log(lm.1a, test.df, test.values)
+output1a=predict(lm.1a,test.df)
+expoutput1a = exp(output1a)
+#summary(expoutput1a)
+#summary(test.values)
+lm.1a.summaries <- rbind(predicted=summary(expoutput1a),actual=summary(test.values))
+lm.1a.main <-  "LOG-Linear Model 1a vs. actual"
+lm.1a.summaries %>% 
+  kable(caption = lm.1a.main) %>%
+  kable_styling(c("bordered","shaded"),latex_options =  "hold_position")
+#plot(expoutput1a~test.values)
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+# Compute RMSE
+print(paste("lm.1a RMSE:", rmse.nb1a)) # defer display
+#plot(lm.1a)
+x1a=data.frame(actual=test.values,predicted=expoutput1a)
+x1amelt=melt(x1a)
+ggplot(data = x1amelt,aes(x=value, fill=variable)) + 
+  geom_density(alpha=0.25) + ggtitle(lm.1a.main) 
+
+```
+
+This model is somewhat improved vs. the previous one.  Most notably, there are no negative predctions.
+
+\newpage
+### linear model 2 - with DATE variable
+
+This is the same as the first model, except the DATE variable has been included.
+Doing so reflects the trend over time, as the system has grown and usage has increased over time.
+
+```{r linear-model-2, echo=F, message=F, warning=F}
+
+lm.2 <- lm(trips ~  DATE+gender+user_type+avg_age+AWND+PRCP+SNOW+SNWD
+                    +TMAX+TMIN+WDF2+WDF5+WSF2+WSF5+WT01+WT02, 
+                    data=train.df)
+#summary(lm.2)   # defer display to appendix
+rmse.nb2 = model.fit.evaluate.rmse(lm.2, test.df, test.values)
+output2=predict(lm.2,test.df)
+#summary(output2)
+#summary(test.values)
+lm.2.summaries <- rbind(predicted=summary(output2),actual=summary(test.values))
+lm.2.main <-  "Linear Model 2 vs. actual"
+lm.2.summaries %>% 
+  kable(caption = lm.2.main) %>%
+  kable_styling(c("bordered","shaded"),latex_options =  "hold_position")
+#plot(output2~test.values)
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+# Compute RMSE
+print(paste("lm.2 RMSE:", rmse.nb2))   # defer display
+#plot(lm.2)
+x2=data.frame(actual=test.values,predicted=output2)
+x2melt=melt(x2)
+ggplot(data = x2melt,aes(x=value, fill=variable)) + 
+  geom_density(alpha=0.25) + ggtitle(lm.2.main) 
+
+```
+
+While improved, this is still not a good model
+
+\newpage
+### LOG linear model 2a - with DATE variable
+
+This is the same as the above model, with DATE added, except the dependent variable is log(trips) rather than trips).
+
+The full regression output can be found in the appendix.
+
+```{r linear-model-2a, echo=F, message=F, warning=F}
+lm.2a <- lm(log(trips) ~  DATE+gender+user_type+avg_age+AWND+PRCP+SNOW+SNWD
+                    +TMAX+TMIN+WDF2+WDF5+WSF2+WSF5+WT01+WT02, 
+                    data=train.df)
+#summary(lm.2a) # defer display
+rmse.nb2a = model.fit.evaluate.rmse.log(lm.2a, test.df, test.values)
+output2a=predict(lm.2a,test.df)
+expoutput2a = exp(output2a)
+#summary(expoutput2a)
+#summary(test.values)
+lm.2a.summaries <- rbind(predicted=summary(expoutput2a),actual=summary(test.values))
+lm.2a.main <-  "LOG-Linear Model 2a vs. actual"
+lm.2a.summaries %>% 
+  kable(caption = lm.2a.main) %>%
+  kable_styling(c("bordered","shaded"),latex_options =  "hold_position")
+#plot(expoutput2a~test.values)
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+# Compute RMSE
+print(paste("lm.2a RMSE:", rmse.nb2a)) # defer display
+#plot(lm.2a)
+x2a=data.frame(actual=test.values,predicted=expoutput2a)
+x2amelt=melt(x2a)
+ggplot(data = x2amelt,aes(x=value, fill=variable)) + 
+  geom_density(alpha=0.25) + ggtitle(lm.2a.main) 
+
+
+```
+
+This model exhibits substantial improvement over the predecessors.
+
+\newpage
+### linear model 3 - remove insignificant variables
+
+The following variables will be included in this model:
+
+* DATE
+* gender
+* user_type
+* avg_age
+* PRCP - Daily Precipitation amount
+* SNWD - depth of snow on the ground
+* TMAX - daily Maximum temperature
+* WT01 - indicator for fog today
+
+The full regression output can be found in the appendix.
+
+```{r linear-model-3, echo=F, message=F, warning=F}
+# linear model 3 -  with DATE variable and remove insignificant variables
+lm.3 <- lm(trips ~  DATE+gender+user_type+avg_age+    PRCP+    SNWD
+                    +TMAX+    WT01, 
+                    data=train.df)
+#summary(lm.3)   # defer display to appendix
+rmse.nb3 = model.fit.evaluate.rmse(lm.3, test.df, test.values)
+output3=predict(lm.3,test.df)
+#summary(output3)
+#summary(test.values)
+lm.3.summaries <- rbind(predicted=summary(output3),actual=summary(test.values))
+lm.3.main <-  "Linear Model 3 vs. actual"
+lm.3.summaries %>% 
+  kable(caption = lm.3.main) %>%
+  kable_styling(c("bordered","shaded"),latex_options =  "hold_position")
+#plot(output3~test.values)
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+# Compute RMSE
+print(paste("lm.3 RMSE:", rmse.nb3))   # defer display
+#plot(lm.3)
+x3=data.frame(actual=test.values,predicted=output3)
+x3melt=melt(x3)
+ggplot(data = x3melt,aes(x=value, fill=variable)) + 
+  geom_density(alpha=0.25) + ggtitle(lm.3.main) 
+
+```
+
+Still not a good model
+
+\newpage
+### LOG linear model 3a - remove insignificant variables
+
+The following variables will be included in this model:
+
+* DATE
+* gender
+* user_type
+* avg_age
+* PRCP - Daily Precipitation amount
+* SNOW - amount of snowfall
+* SNWD - depth of snow on the ground
+* TMAX - daily Maximum temperature
+* WT01 - indicator for fog today
+
+The full regression output can be found in the appendix.
+
+```{r linear-model-3a, echo=F, message=F, warning=F}
+lm.3a <- lm(log(trips) ~  DATE+gender+user_type+avg_age+    PRCP+SNOW+SNWD
+                    +TMAX+    WT01, 
+                    data=train.df)
+#summary(lm.3a) # defer display
+rmse.nb3a = model.fit.evaluate.rmse.log(lm.3a, test.df, test.values)
+output3a=predict(lm.3a,test.df)
+expoutput3a = exp(output3a)
+#summary(expoutput3a)
+#summary(test.values)
+lm.3a.summaries <- rbind(predicted=summary(expoutput3a),actual=summary(test.values))
+lm.3a.main <-  "LOG-Linear Model 3a vs. actual"
+lm.3a.summaries %>% 
+  kable(caption = lm.3a.main) %>%
+  kable_styling(c("bordered","shaded"),latex_options =  "hold_position")
+#plot(expoutput3a~test.values)
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+# Compute RMSE
+print(paste("lm.3a RMSE:", rmse.nb3a)) # defer display
+#plot(lm.3a)
+x3a=data.frame(actual=test.values,predicted=expoutput3a)
+x3amelt=melt(x3a)
+ggplot(data = x3amelt,aes(x=value, fill=variable)) + 
+  geom_density(alpha=0.25) + ggtitle(lm.3a.main) 
+
+```
+
+This model improves slightly over LOG-linear model 2a and appears to fit the actual data well.
+
+\newpage
+## Generalized linear models
+
+We will create two poisson models and two gaussian models to estimate the daily number of trips.   
+
+The first of each pair will contain all the variables, and the second will contain just those variables deemed significant.   
+
+Results will be evaluated by RMSE.
+
+### GLM poisson 1 -- all variables in the training dataset
+
+```{r glm-poisson-1, echo=F, message=F, warning=F}
+# glm model 1
+
+glm.poisson.1 <- glm(trips ~ ., data = train.df, family = poisson())
+#summary(glm.poisson.1)
+rmse.poisson.1 = model.fit.evaluate.rmse(glm.poisson.1, test.df, test.values) 
+#print(paste("glm.poisson.1 RMSE: ", rmse.poisson.1))
+
+output11=predict(glm.poisson.1,test.df)
+#summary(output11)
+#summary(test.values)
+#plot(output11~test.values, main="glm.poisson.1")
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+
+#plot(glm.poisson.1)
+
+glm.poisson.1.summaries <- rbind(predicted=summary(output11),actual=summary(test.values))
+glm.poisson.1.main <-  "GLM Poisson model 1 (Full) vs. actual"
+glm.poisson.1.summaries %>% 
+  kable(caption = glm.poisson.1.main) %>%
+  kable_styling(c("bordered","shaded"),latex_options =  "hold_position")
+#plot(output11~test.values)
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+# Compute RMSE
+print(paste("glm.poisson.1 RMSE:", rmse.poisson.1))   # defer display
+#plot(glm.poisson.1)
+x11=data.frame(actual=test.values,predicted=output11)
+x11melt=melt(x11)
+ggplot(data = x11melt,aes(x=value, fill=variable)) + 
+  geom_density(alpha=0.25) + ggtitle(glm.poisson.1.main) 
+
+```
+
+Not a good model at all!
+
+\newpage
+### GLM poisson 2 - remove insignificant variables
+
+The following variables will be included in this model:
+
+* DATE
+* gender
+* user_type
+* avg_age
+* PRCP - Daily Precipitation amount
+* SNOW - amount of snowfall
+* SNWD - depth of snow on the ground
+* TMAX - daily Maximum temperature
+* WT01 - indicator for fog today
+
+The full regression output can be found in the appendix.
+
+```{r glm-poisson-2, echo=F, message=F, warning=F}
+# Keep just the significant variables from above
+
+glm.poisson.2 <- glm(trips ~ DATE+PRCP+SNOW+SNWD+TMAX+WT01
+                     +user_type+gender+ avg_age,
+                     data = train.df, family = poisson())
+#summary(glm.poisson.2)
+rmse.poisson.2 = model.fit.evaluate.rmse(glm.poisson.2, test.df, test.values)
+
+output12=predict(glm.poisson.2,test.df)
+#summary(output12)
+#summary(test.values)
+#plot(output12~test.values, main="glm.poisson.2")
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+
+#plot(glm.poisson.2)
+glm.poisson.2.summaries <- rbind(predicted=summary(output12),actual=summary(test.values))
+glm.poisson.2.main <-  "GLM Poisson model 2 (Reduced) vs. actual"
+glm.poisson.2.summaries %>% 
+  kable(caption = glm.poisson.2.main) %>%
+  kable_styling(c("bordered","shaded"),latex_options =  "hold_position")
+#plot(output12~test.values)
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+# Compute RMSE
+print(paste("glm.poisson.2 RMSE:", rmse.poisson.2))   # defer display
+#plot(glm.poisson.2)
+x12=data.frame(actual=test.values,predicted=output12)
+x12melt=melt(x12)
+ggplot(data = x12melt,aes(x=value, fill=variable)) + 
+  geom_density(alpha=0.25) + ggtitle(glm.poisson.2.main) 
+
+```
+
+Also not a good model!
+
+\newpage
+### GLM gaussian 3 -  -- all variables in the training dataset
+
+The full regression output can be found in the appendix.
+
+
+```{r glm-gaussian-3, echo=F, message=F, warning=F}
+
+# glm model 3
+glm.gaussian.3 <- glm(trips ~ ., data = train.df, family = gaussian)
+#summary(glm.gaussian.3)
+rmse.gaussian.3 = model.fit.evaluate.rmse(glm.gaussian.3, test.df, test.values) 
+#print(paste("glm.gaussian.3 RMSE: ", rmse.gaussian.3))
+
+output13=predict(glm.gaussian.3,test.df)
+#summary(output13)
+#summary(test.values)
+#plot(output13~test.values, main="glm.gaussian.3")
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+
+#plot(glm.gaussian.3)
+
+glm.gaussian.3.summaries <-  rbind(predicted=summary(output13),actual=summary(test.values))
+glm.gaussian.3.main <-  "GLM Gaussian model 3 (Full) vs. actual"
+glm.gaussian.3.summaries %>% 
+  kable(caption = glm.gaussian.3.main) %>%
+  kable_styling(c("bordered","shaded"),latex_options =  "hold_position")
+#plot(output11~test.values)
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+# Compute RMSE
+print(paste("glm.gaussian.3 RMSE:", rmse.gaussian.3))   # defer display
+#plot(glm.gaussian.3)
+x13=data.frame(actual=test.values,predicted=output13)
+x13melt=melt(x13)
+ggplot(data = x13melt,aes(x=value, fill=variable)) + 
+  geom_density(alpha=0.25) + ggtitle(glm.gaussian.3.main) 
+```
+Still not a good model.
+
+\newpage
+### GLM gaussian 4 - remove insignificant variables
+
+* DATE
+* gender
+* user_type
+* avg_age
+* PRCP - Daily Precipitation amount
+* SNOW - amount of snowfall
+* SNWD - depth of snow on the ground
+* TMAX - daily Maximum temperature
+* WT01 - indicator for fog today
+
+The full regression output can be found in the appendix.
+
+```{r glm-gaussian-4, echo=F, message=F, warning=F}
+
+# glm model 4
+
+glm.gaussian.4 <- glm(trips ~ DATE+PRCP+SNWD+TMAX+WT01+user_type+gender+avg_age, 
+                      data = train.df, family = gaussian)
+#summary(glm.gaussian.4)
+rmse.gaussian.4 = model.fit.evaluate.rmse(glm.gaussian.4, test.df, test.values) 
+#print(paste("glm.gaussian.4 RMSE: ", rmse.gaussian.4))
+
+output14=predict(glm.gaussian.4,test.df)
+#summary(output14)
+#summary(test.values)
+#plot(output14~test.values, main="glm.gaussian.4")
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+
+#plot(glm.gaussian.4)
+
+
+glm.gaussian.4.summaries <-  rbind(predicted=summary(output14),actual=summary(test.values))
+glm.gaussian.4.main <-  "GLM Gaussian model 4 (reduced) vs. actual"
+glm.gaussian.4.summaries %>% 
+  kable(caption = glm.gaussian.4.main) %>%
+  kable_styling(c("bordered","shaded"),latex_options =  "hold_position")
+#plot(output14~test.values)
+#abline(h=0,col="red")
+#abline(v=0,col="red")
+# Compute RMSE
+print(paste("glm.gaussian.4 RMSE:", rmse.gaussian.4))   # defer display
+#plot(glm.gaussian.4)
+x14=data.frame(actual=test.values,predicted=output14)
+x14melt=melt(x14)
+ggplot(data = x14melt,aes(x=value, fill=variable)) + 
+  geom_density(alpha=0.25) + ggtitle(glm.gaussian.4.main) 
+
+
+```
+
+\newpage
+# 4. Results
+<!--
+- Needs to systematically and clearly articulate the study findings. If the results are unclear, the reviewer must decide whether the analysis of the data was poorly executed or whether the Results section is poorly organized.
+-->
+
+## Table of RMSE results
+
+Here is a table which summarizes the RMSE values from the 10 models above:
+
+```{r table-of-results, echo=F,warning=F,message=F}
+
+model_names <- c(
+  "Linear Model 1: no dates",
+  "Log-Linear Model 1a: no dates",
+  "Linear Model 2: add dates",
+  "Log-Linear Model 2a: add dates",
+  "Linear Model 3: reduced to significant vars",
+  "Log-Linear Model 3a: reduced to significant vars",
+  "GLM model 1: Full Poisson Model",
+  "GLM model 2: Poisson reduced to significant vars",
+  "GLM model 3: Full Gaussian Model",
+  "GLM model 4: Gaussian reduced to significant vars"
+) 
+
+model_rmse <- c(
+  rmse.nb1,
+  rmse.nb1a,
+  rmse.nb2,
+  rmse.nb2a,
+  rmse.nb3,
+  rmse.nb3a,
+  rmse.poisson.1,
+  rmse.poisson.2,
+  rmse.gaussian.3,
+  rmse.gaussian.4
+)
+
+cbind(model_names,model_rmse) %>% 
+  kable(caption="Table of RMSE results on 1/1000 of dataset") %>% 
+  kable_styling(c("bordered","striped"),latex_options =  "hold_position")
+```
+
+## Findings
+
+#### The findings from comparing the 3 standard linear models (and, their log-linear counterparts) are:
+
+1. DATE is a significant variable in the linear model, when we comparing model 1 and 2 by adding the DATE variable. It can tell strong seasonality in the data as we didn't take holiday and weekends out of the model. The influence is bigger than any other factor. The RMSE improved from `r rmse.nb1` to `r rmse.nb2`. The improvement is about 10 percent.
+
+2. Removing insignificant variables from linear model 2 to model 3, the model performance is similar; RMSE is essentially same in model 2 and 3 with and without those variables. 
+
+
+However, the problem with estimating daily trips as a straight **linear** model is that such a model can return a negative value, which is nonsensical.  Therefore, we also estimate **log(trips)** for each of the above sets of independent variables.
+
+The RMSE for `log(trips)` (i.e, model 1a) is about the same as that of the corresponding linear model, `r rmse.nb1a`.  There is substantial improvement when we incorporate the date, in model 2a:  the RMSE drops to `r rmse.nb2a`. which is an improvement of more than 35 percent.  There is very slight further improvement on model 3a (where insignificant variables have been dropped): the RMSE improves by a further 1 percent to `r rmse.nb3a` .
+
+
+#### The findings from comparing the 4 generalized linear models (Poission and Gaussian) are:
+
+1. With Poisson models 1 and 2, the model with more variables has a better outcome. The first model with all variables has a better RMSE `r rmse.poisson.1` vs. `r rmse.poisson.2`. The slight decrease of RMSE should be considered for parsimoniousness, choosing the second poisson model with only 6 variables. However, with such a high RMSE, both poisson models are quite bad.
+
+2. With Gaussian models 3 and 4, the model with more variables has a slightly outcome. The first model, incorporating all variables has a better RMSE `r rmse.gaussian.3` vs. the second model `r rmse.gaussian.4`. Again, for parsimoniousness, the preferred model is glm.gaussian.4 .
+
+3. Comparing the models between Poisson family and Gaussian family, the results are perfectly clear: The Gaussian models have a much better outcome with least RMSE `r rmse.gaussian.3` vs. the best outcome from Poisson family, `r rmse.poisson.1`.
+
+
+### Select Preferred Model
+
+The overall model selection will be the **LOG-linear model 3a**, which had the lowest RMSE and for which the density plot appeared to most closely overlap that of the actual results.
+
+The equation for this model is 
+
+$$\begin{aligned}
+log(trips) =        
+&-7.4150383911 \\
+&+0.0003888249 \cdot DATE \\
+&-0.9965446415 \cdot I_{gender=Female} \\
+&-1.8523801948 \cdot I_{gender=UNKNOWN} \\
+&+1.7355605144 \cdot I_{user\_type=Subscriber} \\
+&-0.5164012581 \cdot I_{user\_type=UNKNOWN} \\
+&+0.0266931302 \cdot avg\_age \\
+&-0.2840324648 \cdot PRCP \\
+&-0.0456678286 \cdot SNOW \\
+&-0.0680191810 \cdot SNWD \\
+&+0.0156835391 \cdot TMAX \\
+&-0.0691515019 \cdot WT01
+\end{aligned}$$
+
+The ***positive*** coefficients indicate the following:
+
+* DATE: this reflects the trend, over time, of increasing daily bike rentals.
+* user_type=Subscriber: this confirms that many more rides are taken by subscribers than by customers (the base category, omitted from the above table as it is embedded into the intercept term)
+* avg_age:  indicates that more rides are taken on days when older riders show up to participate
+* TMAX: indicates that more rides are taken on days when the maximum temperature is warmer.
+
+The ***negative coefficients*** indicate the following:
+
+* gender=Female: fewer trips are taken (collectively) by female riders than by male riders (the base category, omitted from the above as it is embedded into the intercept term)
+* gender=UNKNOWN: many fewer trips are taken (collectively) by the group of users whose gender is known.  (However, this could be because such group of users may be small.)
+* user_type=UNKNOWN: fewer trips are taken (collectively) by the group of users for whom it is unknown whether they are annual subscribers or daily customers (the base category.) (As above,  this could be because such group of users may be small.)
+* PRCP: this confirms that fewer trips are taken on days with heavy precipitation.
+* SNOW: this confirms that fewer trips are taken on days when show is falling.
+* SNWD: fewer trips are taken on days when there is already substantial depth of snow on the ground.
+* WT01: fewer trips are taken on days when fog has been recorded.
+
+
+
+\newpage
+# 5. Discussion
+
+
+<!--
+– Should state whether their hypotheses were verified or proven untrue or, if no hypotheses were given, whether their research questions were answered.
+The authors should also comment on their results in light of previous studies and explain what differences (if any) exist between their findings and those reported by others and attempt to provide an explanation for the discrepancies.
+-->
+
+
+In this CitiBike predictive analysis, we experienced a number of limitations in dataset collection and manipulations as described below, and a plan for further development will be discussed.
+
+1. On the weather data we have 
+only daily reporting, so we couldn't do weather-based hourly or peak-hours predictive analysis.
+
+2. We used 1/1000 sample of the CitiBike data. The data size is very large, around 90 million records from 2013 to 2019. We tried to use AWS Athena to manipulate the data. Because the format of the CitiBike dataset changed from month to month, AWS Athena was  not successful in uploading the data compeletly. So we sampled the data using a deterministic process to take each 1000th value from the data files. 
+
+3. We used the numeric value of DATE as one of the predictive variables. The positive coefficient on DATA reflects the trend in increased ridership over time. A potential future enhancement would be to model seasonality, which could be achieved using monthly dummies, or a "Winter" vs. "Summer" indicator. As we did not study time series models in this course, this ruled out the use of techniques such as SARIMA (Seasonal ARIMA)-based regression techniques.
+
+
+
+\newpage
+# 6. Conclusion, Summary, and Future Work
+
+<!--
+* Recap briefly what you do in the paper
+* Evaluate the effectiveness of your research and provide recommendations (if applicable)
+* Make sure that all of the questions raised in the introduction and the literature review have been addressed
+* Compare the final results against the original aims and objectives
+* Identify any shortcomings and future research
+-->
+
+Because of limitations with time and computing power, even though we did much research on the CitiBike business, rules, and regulations, we could not contribute all our ideas into the models.    
+From the comprehensive literature review, in the future we could expand the analysis further, such as prediction of aggregate trip fees to determine revenue generation, etc.   
+
+Interestingly, CitiBike just announced that from next month they will be modifying their formula for assessing fees on long trips.  Instead of using the 15-minute increment which they have used since they started, they will instead assess fees per minute.  This is a welcome change because under the present scheme, a ride of 45 minutes and one second is assessed the same surchage as a ride of 59 minutes and 59 seconds.  Under the revised scheme, which takes effect from January 15, 2020, all users will be assessed 15 cents per minute after their initial free period. https://www.citibikenyc.com/blog/electric-bikes-returning .   It would be interesting to revisit this analysis in the future as updated data could inform whether users are willing to extend their rides despite incurring small fees.
+
+
+
+\newpage
+# References
+
+<div id="refs"></div>
+
+\newpage
+# Appendix
+
+## Figures and Graphs
+<!--
+- Should illustrate the important features of the methods and results.
+
+- Should allow the reader to understand the figure or graph without having to refer back to the text of the manuscript.
+
+- Common mistakes made by inexperienced authors are failing to include figures that best depict their findings, writing unclear figure legends, and making poor use of arrows.
+-->
+
+
+
+
+#### Plot the data - training dataset & weather
+
+Let's make some plots of the aggregated data, to gain an understanding of the relationships between various features
+
+```{r plot-weather-data, echo=F, message=F,warning=F}
+library(ggplot2)
+# user_type boxplot
+ggplot(data = train_weather,
+       aes(x = user_type,
+           y = trips)) +
+  geom_boxplot()
+# trip_fee scatterplot
+ggplot(data = train_weather,
+       aes(x = sum_trip_fee,
+           y = trips)) +
+  geom_point()
+
+# weather TMAX over the year
+ggplot(data = train_weather,
+       aes(x = DATE,
+           y = TMAX)) +
+  geom_point()
+
+# weather TMAX and smooth over the year
+ggplot(data = train_weather,
+       aes(x = DATE,
+           y = TMAX,
+           color = year(DATE))) +
+  geom_smooth()
+
+# the number of trips with min. tempareture
+ggplot(data = train_weather,
+       aes(x = TMIN,
+           y = trips)) +
+  geom_smooth()
+# the number of trips with max. tempareture
+ggplot(data = train_weather,
+       aes(x = gender,
+           y = trips)) +
+  geom_boxplot()
+
+# the number of trips by date
+ggplot(data = train_weather,
+       aes(x = DATE,
+           y = trips)) +
+  geom_point()
+
+par(mfrow=c(2,2))
+plot(density(train_weather$trips), main = "trips")
+plot(density(train_weather$avg_age), main = "avg_age")
+plot(density(train_weather$mean_duration), main = "mean_duration")
+plot(density(train_weather$median_duration), main = "median_duration")
+plot(density(train_weather$AWND), main = "AWND - Average Daily Wind Speed")
+plot(density(train_weather$PRCP), main = "PRCP - Amount of Daily Precipitation")
+plot(density(train_weather$SNOW), main = "SNOW - Amount of Daily Snowfall")
+plot(density(train_weather$SNWD), main = "SNWD - Depth of Snow on the ground")
+plot(density(train_weather$TMAX), main = "TMAX - Maximum Daily Temperature")
+plot(density(train_weather$TMIN), main = "TMIN - Minimum Daily Temperature")
+
+```
+
+
+\newpage
+## Tables
+<!--
+- Should summarize the data, make the data more easily understandable, and point out important comparisons.
+
+- Description of the data in the text, if possible, is preferable to the use of a space-consuming table.
+-->
+
+
+### Weather data - NCDC (National Climatic Data Center) 
+
+An example of the key weather data elements includes:
+
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|Feature    |	description                        |Random date 1                 |Random date 2                |      
++===========+====================================+==============================+=============================+      
+|STATION    |Station ID number                   |USW00094728                   |USW00094728                  |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|NAME       |Name of station                     |NY CITY CENTRAL PARK, NY US   |NY CITY CENTRAL PARK, NY US	|    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|LATITUDE   |                                    |40.77898	                    |40.77898	                    |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|LONGITUDE  |                                    |-73.96925	                    |-73.96925	                  |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|ELEVATION  |                                    |42.7	                        |42.7	                        |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|DATE       |                                    |1/30/2019	                    |7/22/2019	                  |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|AWND       |Average Wind Speed	                 |	                            |2.68	                        |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|PRCP       |Amount of precipitation             |0.01	                        |1.66	                        |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|SNOW       |Amount of snowfall	                 |0.4                           |0                            |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|SNWD       |Snow Depth	                         |0	                            |0                            |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|TAVG       |Average temperature	               |                              |                             |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|TMAX       |Maximum temperature                 |35                            |90                           |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|TMIN       |Minimum temperature                 |6	                            |72                           |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|WDF2       |Direction of fastest 2-minute wind  |                              |10                           |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|WDF5       |Direction of fastest 5-second wind  |                              |340                          |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|WSF2       |Fastest 2-minute Wind Speed	       |                              |14.1                         |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|WSF5       |Fastest 5-second Wind Speed	       |                              |25.1                         |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|WT01       |Fog, ice fog, or freezing fog?	     |1                             |1                            |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|WT02       |Heavy fog or heavy freezing fog?    |                              |1                            |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|WT03       |Thunder?	                           |                              |1                            |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|WT06       |Glaze or rime?	                     |                              |	                            |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+|WT08       |Smoke or haze?  	                   |                              |	                            |    
++-----------+------------------------------------+------------------------------+-----------------------------+      
+
+\newpage
+### CitiBike data
+
+An example record from the CitiBike dataset includes the following features:     
+
++-------------------------+-----------------------+      
+| feature name            | value                 |    
++=========================+=======================+    
+|	tripduration (seconds)  | 527	                  |    
++-------------------------+-----------------------+      
+|	starttime               | 10/1/2019 00:00:05.6	|    
++-------------------------+-----------------------+      
+|	stoptime                | 10/1/2019 00:08:52.9	|    
++-------------------------+-----------------------+      
+|	start station id        | 3746	                |    
++-------------------------+-----------------------+      
+|	start station name      | 6 Ave & Broome St	    |    
++-------------------------+-----------------------+      
+|	start station latitude  | 40.72430832	          |    
++-------------------------+-----------------------+      
+|	start station longitude | -74.00473036	        |    
++-------------------------+-----------------------+      
+|	end station id          | 223	                  |    
++-------------------------+-----------------------+      
+|	end station name        | W 13 St & 7 Ave	      |    
++-------------------------+-----------------------+      
+|	end station latitude    | 40.73781509	          |    
++-------------------------+-----------------------+      
+|	end station longitude   | -73.99994661	        |    
++-------------------------+-----------------------+      
+|	bikeid                  | 41750	                |    
++-------------------------+-----------------------+      
+|	usertype                | Subscriber	          |    
++-------------------------+-----------------------+      
+|	birth year              | 1993	                |    
++-------------------------+-----------------------+      
+|	gender                  | 1	                    |    
++-------------------------+-----------------------+      
+
+\newpage
+### Summaries of LM and GLM model results
+
+### Standard Linear Models (LM)
+
+#### linear model 1 - without DATE variable
+```{r display-lm1, echo=F}
+summary(lm.1)
+print(paste("lm.1 RMSE:", rmse.nb1))
+```
+
+\newpage
+#### LOG linear model 1a - without DATE variable
+```{r display-lm1a, echo=F}
+summary(lm.1a)
+print(paste("lm.1a RMSE:", rmse.nb1a))
+```
+
+\newpage
+#### linear model 2 - with DATE variable
+```{r display-lm2, echo=F}
+summary(lm.2)
+print(paste("lm.2 RMSE:", rmse.nb2))
+```
+
+\newpage
+#### LOG linear model 2a - with DATE variable
+```{r display-lm2a, echo=F}
+summary(lm.2a)
+print(paste("lm.2a RMSE:", rmse.nb2a))
+```
+
+\newpage
+#### linear model 3 - remove insignificant variables
+```{r display-lm3, echo=F}
+summary(lm.3)
+print(paste("lm.3 RMSE:", rmse.nb3))
+```
+
+\newpage
+#### LOG linear model 3a - remove insignificant variables
+```{r display-lm3a, echo=F}
+summary(lm.3a)
+print(paste("lm.3a RMSE:", rmse.nb3a))
+```
+
+\newpage
+### Generalized linear models
+
+#### GLM poisson 1 -- all variables
+```{r display-glm-1, echo=F}
+summary(glm.poisson.1)
+print(paste("glm.poisson.1 RMSE: ", rmse.poisson.1))
+```
+
+\newpage
+#### GLM poisson 2 - remove insignificant variables
+```{r display-glm-2, echo=F}
+summary(glm.poisson.2)
+print(paste("glm.poisson.2 RMSE: ", rmse.poisson.2))
+```
+
+\newpage
+#### GLM gaussian 3 -- all variables
+```{r display-glm-3, echo=F}
+summary(glm.gaussian.3)
+print(paste("glm.gaussian.3 RMSE: ", rmse.gaussian.3))
+```
+
+\newpage
+#### GLM gaussian 4 - remove insignificant variables
+```{r display-glm-4, echo=F}
+summary(glm.gaussian.4)
+print(paste("glm.gaussian.4 RMSE: ", rmse.gaussian.4))
+```
+
+
+
+
+
+\newpage
+## R statistical programming code
+```{r chunk01-setup, eval=F}  
+knitr::opts_chunk$set(echo = TRUE, fig.pos = 'h')
+mydir = "C:/Users/Michael/Dropbox/priv/CUNY/MSDS/201909-Fall/DATA621_Nasrin/20201214_FinalProject/"
+#mydir = "./"
+setwd(mydir)
+knitr::opts_knit$set(root.dir = mydir)
+options(digits=7,scipen=999,width=120)
+datadir = paste0(mydir,"/Data/")
+
+
+### This contains all the data -- total 90.4M rows, 17GB size, 77 monthly files 
+rawdatadir = "C:/temp/CitibikeData/"
+### This contains 1/1000 of the rows from each of the data files -- total 90.4K rows, 17MB size
+slimdatadir = "C:/temp/CitibikeDataSlim/"
+#slimdatadir = "./CitibikeDataSlim/"
+```
+
+
+
+
+```{r chunk02-load-libraries, eval=F}
+### Load libraries
+library(tidyverse)
+library(lubridate)
+library(sp)
+library(Hmisc)
+library(corrplot)
+library(forcats)
+library(kableExtra)
+```
+
+
+
+\newpage
+
+
+
+```{r chunk03-weather-data, eval=F}
+# 1. Data Exploration
+
+#### Weather data
+
+
+
+# Weather data is obtained from the  NCDC (National Climatic Data Center) via https://www.ncdc.noaa.gov/cdo-web/
+# click on search tool  https://www.ncdc.noaa.gov/cdo-web/search
+# select "daily summaries"
+# select Search for Stations
+# Enter Search Term "USW00094728" for Central Park Station: 
+# https://www.ncdc.noaa.gov/cdo-web/datasets/GHCND/stations/GHCND:USW00094728/detail
+# "add to cart"
+
+
+weatherfilenames=list.files(path="./",pattern = '.csv$', full.names = T)    # ending with .csv ; not .zip
+weatherfilenames
+weatherfile <- "NYC_Weather_Data_2013-2019.csv"
+
+## Perhaps we should rename the columns to more clearly reflect their meaning?
+weatherspec <- cols(
+  STATION = col_character(),
+  NAME = col_character(),
+  LATITUDE = col_double(),
+  LONGITUDE = col_double(),
+  ELEVATION = col_double(),
+  DATE = col_date(format = "%F"),          #  readr::parse_datetime() :   "%F" = "%Y-%m-%d"
+  #DATE = col_date(format = "%m/%d/%Y"), #col_date(format = "%F")
+  AWND = col_double(),                     # Average Daily Wind Speed
+  AWND_ATTRIBUTES = col_character(),
+  PGTM = col_double(),                    # Peak Wind-Gust Time
+  PGTM_ATTRIBUTES = col_character(),
+  PRCP = col_double(),                    # Amount of Precipitation
+  PRCP_ATTRIBUTES = col_character(),
+  SNOW = col_double(),                    # Amount of Snowfall
+  SNOW_ATTRIBUTES = col_character(),
+  SNWD = col_double(),                    # Depth of snow on the ground
+  SNWD_ATTRIBUTES = col_character(),
+  TAVG = col_double(),                    # Average Temperature (not populated)
+  TAVG_ATTRIBUTES = col_character(),
+  TMAX = col_double(),                    # Maximum temperature for the day
+  TMAX_ATTRIBUTES = col_character(),
+  TMIN = col_double(),                    # Minimum temperature for the day
+  TMIN_ATTRIBUTES = col_character(),
+  TSUN = col_double(),                    # Daily Total Sunshine (not populated)
+  TSUN_ATTRIBUTES = col_character(),
+  WDF2 = col_double(),                    # Direction of fastest 2-minute wind
+  WDF2_ATTRIBUTES = col_character(),
+  WDF5 = col_double(),                    # Direction of fastest 5-second wind
+  WDF5_ATTRIBUTES = col_character(),
+  WSF2 = col_double(),                    # Fastest 2-minute wind speed
+  WSF2_ATTRIBUTES = col_character(),
+  WSF5 = col_double(),                    # fastest 5-second wind speed
+  WSF5_ATTRIBUTES = col_character(),
+  WT01 = col_double(),                    # Fog
+  WT01_ATTRIBUTES = col_character(),
+  WT02 = col_double(),                    # Heavy Fog
+  WT02_ATTRIBUTES = col_character(),
+  WT03 = col_double(),                    # Thunder
+  WT03_ATTRIBUTES = col_character(),
+  WT04 = col_double(),                    # Sleet
+  WT04_ATTRIBUTES = col_character(),
+  WT06 = col_double(),                    # Glaze
+  WT06_ATTRIBUTES = col_character(),
+  WT08 = col_double(),                    # Smoke or haze
+  WT08_ATTRIBUTES = col_character(),
+  WT13 = col_double(),                    # Mist
+  WT13_ATTRIBUTES = col_character(),
+  WT14 = col_double(),                    # Drizzle
+  WT14_ATTRIBUTES = col_character(),
+  WT16 = col_double(),                    # Rain
+  WT16_ATTRIBUTES = col_character(),
+  WT18 = col_double(),                    # Snow      
+  WT18_ATTRIBUTES = col_character(),
+  WT19 = col_double(),                    # Unknown source of precipitation
+  WT19_ATTRIBUTES = col_character(),
+  WT22 = col_double(),                    # Ice fog
+  WT22_ATTRIBUTES = col_character()
+)
+
+
+
+# load all the daily weather data
+weather <- read_csv(weatherfile,col_types = weatherspec)
+
+summary(weather)
+# extract just 2019
+#weather2019 <- weather[(weather$DATE>="2019-01-01" & weather$DATE<="2019-12-31"),]
+
+
+# extract just one month
+#weather201906 <- weather[(weather$DATE>="2019-06-01" & weather$DATE<="2019-06-30"),]
+
+```
+
+```{r chunk04-fix-weather-NAs, eval=F}
+### Fix the factor items
+attribute_indexes <- names(weather) %>% grep("ATTRIBUTES",x = .)
+attribute_names <- names(weather)[attribute_indexes]
+for (atr in attribute_names) {
+  #print(paste("atr = ", atr))
+  #print(summary(weather[atr]))
+  weather[,atr]<-fct_explicit_na(f=pull(weather[atr]),na_level = ",,")
+  #print(summary(weather[atr]))
+  #print("______________________________")  
+}
+#print(summary(weather))
+
+### Fix the non-factor items by setting to 0
+
+non_attribute_indexes <- names(weather) %>% grep("ATTRIBUTES",x = .,invert = T)
+non_attribute_names <- names(weather)[non_attribute_indexes]
+for (atr in non_attribute_names) {
+  #print(paste("atr = ", atr))
+  #print(summary(weather[atr]))
+  weather[is.na(weather[,atr]),atr]=0
+  #print(summary(weather[atr]))
+  #print("______________________________")  
+}
+print(summary(weather))
+
+
+```
+
+```{r chunk05-drop-ATTR-columns, eval=F}
+#### Drop ATTR columns from weather, as they are not useful (and cause factor headaches)
+attr_indexes <- names(weather) %>% grep("ATTR",x = .)
+attr_names <- names(weather)[attr_indexes]
+# protect against manually running more than once, because it would delete everything if you do
+if(length(attr_indexes)>0) {
+   weather <- weather[,-attr_indexes]
+   summary(weather)
+   dim(weather)
+   }
+```
+
+
+
+```{r chunk06-drop-constant-columns, eval=F}
+#### Drop constant columns:  "STATION"   "NAME"      "LATITUDE"  "LONGITUDE" "ELEVATION"
+#### Because all the weather data is from one station (Central Park) the values in these columns do not change.
+#### Thus, they are not useful for modeling
+#### They are the first 5 columns:
+  
+constant_columns=c("STATION",   "NAME",      "LATITUDE",  "LONGITUDE", "ELEVATION")
+print("All same:")
+summary(weather[,constant_columns])
+# guard against accidentally deleting too many columns
+if(all.equal(names(weather)[1:5],constant_columns)) {
+  weather <- weather[,-c(1:5)]
+  summary(weather)
+  dim(weather)
+}
+
+```
+
+
+```{r chunk07-load-CB-data-file, eval=F}
+#### Function to load up a CitiBike datafile
+read_CB_data_file = function(f){
+  Startloadtime = Sys.time()
+  print(paste("reading data file   ", f, " at ", Startloadtime))
+  
+  ### Extract the year and month from the datafile.  Needed below for inconsistent date/time formats by month.
+  YYYYMM <- sub("^.*/","",f) %>% sub("-citibike-tripdata.csv","",.)
+  print(paste("YYYYMM = ", YYYYMM))
+
+  
+  ### Read the datafile according to the format specifications
+  datafile = read_csv(f,skip = 1,
+#The column names have slight format differences across months.  So, replace all column names with these:
+                  col_names=c("trip_duration",            # in seconds
+                              "s_time",                   # start date/time
+                              "e_time",                   # end date/time
+                              "s_station_id",             # station ID for beginning of trip 
+                              "s_station_name", 
+                              "s_lat",                    # start station latitude
+                              "s_long",                   # start station longitude
+                              "e_station_id",             # station ID for end of trip
+                              "e_station_name",
+                              "e_lat",                    # latitude
+                              "e_long",                   # longitude
+                              "bike_id",                  # every bike has a 5-digit ID number
+                              "user_type",                # Annual Subscriber or Daily Customer
+                              "birth_year",               # Can infer age from this
+                              "gender")                   # 1=Male,2=Female,0=unknown
+#                  ,col_types = "dTTffddffddifif"    # d=decimal; T=datetime; f=factor; i=integer
+### specify the data type for each of the above columns
+### Note: because of changes in the format across months, we will  have to read the date/time as char for now
+### also we will have to read the birth_year as char for now because of missing data (either "\\N" or "NULL")
+                  ,col_types = "dccffddffddifcf"    # d=decimal; c=character; f=factor; i=integer
+                  )
+  Endloadtime = Sys.time()
+  print(paste("done reading data file ",  f, " at ", Endloadtime))
+  Totalloadtime = round(Endloadtime - Startloadtime, 2)
+  print(paste("Totaltime = ", Totalloadtime))
+  
+## Fix format changes on time and birth_year variables 
+  s_time <- pull(.data=datafile, var = "s_time")
+  e_time <- pull(.data=datafile, var = "e_time")
+  
+  ### Early and recent files use format "%Y-%m-%d %H:%M:%OS"
+  if (YYYYMM < "201409" | YYYYMM > "201609") timeformat="%Y-%m-%d %H:%M:%OS"
+
+  ### time between the months uses format "%m/%d/%Y %H:%M:%OS"
+  if (YYYYMM >= "201409" & YYYYMM <= "201609") timeformat="%m/%d/%Y %H:%M:%OS"
+  ### except for the first 3 months of 2015, time is only HH:MM -- no seconds!
+  if (YYYYMM >= "201501" & YYYYMM <= "201503") timeformat="%m/%d/%Y %H:%M"
+  ### Same for June 2015, time is only HH:MM -- no seconds!
+  if (YYYYMM == "201506") timeformat="%m/%d/%Y %H:%M"
+  
+  datafile[,"s_time"] <- as.POSIXct(s_time, format=timeformat)
+  datafile[,"e_time"] <- as.POSIXct(e_time, format=timeformat)
+
+#### note:  on the first Sunday of November, clocks move back 1 hour.
+#### This means that the hour 1am-2am EDT is followed by the hour 1am-2am EST.
+#### If a bicycle was rented during this hour "EDT",
+#### but returned during the subsequent hour "EST",
+#### then the trip duration could appear negative.
+#### This is because the default loader will assume all times on this date are EST.
+#### In this case, the below will force such start-times back an hour:
+  
+iii = which(datafile$s_time>datafile$e_time)
+if(length(iii)>0) {
+  print("***DAYLIGHT SAVINGS PROBLEM***")
+  print(datafile[iii,])
+  print("**Start times:")
+  print(pull(datafile[iii,2]))
+  print(pull(datafile[iii,2]) %>% as.numeric())
+  print(unclass(datafile[iii,2])$s_time)
+  print("**End times:")
+  print(pull(datafile[iii,3]))
+  print(pull(datafile[iii,3]) %>% as.numeric())
+  print(unclass(datafile[iii,3])$e_time)
+
+  
+  print("***CHANGING s_time backward***")
+  new_s_time <- ifelse(datafile$s_time>datafile$e_time,
+                       datafile$s_time-60*60,  # pushes back 1 hour from EST to EDT 
+                       datafile$s_time) %>% as.POSIXct(., origin= "1970-01-01")
+  print("***CHANGING e_time forward***")
+  new_e_time <- ifelse(datafile$s_time>datafile$e_time,
+                       datafile$e_time+60*60,  # pushes forward 1 hour from EDT to EST 
+                       datafile$e_time) %>% as.POSIXct(., origin= "1970-01-01")
+  before_diff <-  datafile[iii,3] - datafile[iii,2] 
+  print(paste("BEFORE difference: ", before_diff))
+  
+  datafile[,"s_time"] <- new_s_time
+  datafile[,"e_time"] <- new_e_time
+  
+print("**AFTER CHANGE**")
+  print(datafile[iii,])
+  print("**Start times**")
+  print(pull(datafile[iii,2]))
+  print(pull(datafile[iii,2]) %>% as.numeric())
+  print(unclass(datafile[iii,2])$s_time)
+  print("**End times**")
+  print(pull(datafile[iii,3]))
+  print(pull(datafile[iii,3]) %>% as.numeric())
+  print(unclass(datafile[iii,3])$e_time)
+
+  after_diff <-  datafile[iii,3] - datafile[iii,2] 
+  print(paste("AFTER difference: ", after_diff))
+    
+  
+  }  
+  
+##
+## set missing birth years to NA  
+  birth_year <- pull(.data=datafile, var = "birth_year")
+## Fix missing birth year on early data (occurs when YYYYMM < "201409")
+  birth_year[birth_year=='\\N']<-NA
+## Fix missing birth year on 2017 (occurs when "201704" YYYYMM < "201712")
+  birth_year[birth_year=='NULL']<-NA
+## Convert the available birth_years to their integer equivalents (while retaining above NAs)
+  datafile[,"birth_year"] <- as.integer(birth_year)
+
+## There are numerous cases between 201610 and 201703 where the usertype is not specified.
+## (It should be "Subscriber" or "Customer", but in such cases it is blank.)  
+## We will set it to "UNKNOWN"  
+  
+#library(forcats)   # loaded above
+  datafile$user_type<-fct_explicit_na(datafile$user_type, "UNKNOWN")
+
+## There was a trial of DOCKLESS BIKES in the Bronx starting from August 2018:
+## https://nyc.streetsblog.org/2018/08/16/a-hit-and-miss-debut-for-dockless-citi-bikes-in-the-bronx/
+## https://d21xlh2maitm24.cloudfront.net/nyc/bronx-service-area-map.png?mtime=20180809110452
+## https://webcache.googleusercontent.com/search?q=cache:9Xz02WSdeOYJ:https://www.citibikenyc.com/how-it-works/dockless-faqs+
+  
+## For these trips, the latitute and longitude of the bike start and stop is given, but
+## the start and end station ID and station name are set to "NULL" in the input datafiles.
+## For clarity, we will change such station_id values to 0 and station_name values to "DOCKLESS" :
+  levels(datafile$s_station_id)[levels(datafile$s_station_id)=="NULL"] <- 0
+  levels(datafile$s_station_name)[levels(datafile$s_station_name)=="NULL"] <- "DOCKLESS"
+  levels(datafile$e_station_id)[levels(datafile$e_station_id)=="NULL"] <- 0
+  levels(datafile$e_station_name)[levels(datafile$e_station_name)=="NULL"] <- "DOCKLESS"
+          
+  
+## for certain months, the datafile is not sorted on s_time (instead it is sorted on s_station_id then s_time)
+## ensure that this month's data is sorted on s_time
+  datafile <- datafile[order(datafile$s_time),]
+  return(datafile)
+}
+
+
+### November 1, 2015
+#read_CB_data_file(filenames[29])
+
+### November 6, 2016
+#read_CB_data_file(filenames[41])
+
+
+
+```
+
+
+
+
+
+```{r chunk08-list-CitiBike-data, eval=F}
+#### List the names of available CitiBike data files
+
+filenames=list.files(path=slimdatadir,pattern = '.csv$', full.names = T)    # ending with .csv ; not .zip
+length(filenames)
+t(t(filenames))
+
+```
+
+```{r chunk09-load-up-data-files,eval=F}
+#### Load up CitiBike data file or files
+#### Load all the data files, noting how much time it takes to load them
+
+Starttime = Sys.time()
+print(paste("Start time: ", Starttime))
+
+### loads up the data for all files -- problem is too much data for my computer to handle if all are loaded
+print("About to load multiple datafiles:")
+
+#suppress listing
+#print(filenames)
+
+
+# call read_CB_data_files to load the files specified
+CB <- do.call(rbind,lapply(filenames,read_CB_data_file))
+
+
+
+### Problem:  loading up multiple files is too much for my computer to handle !!!!
+
+
+
+### load up just a single month of data ("filename")
+#### Look at just June 2019
+##filename = filenames[6]
+##print(paste("Loading data for ", filename))
+##CB <- read_CB_data_file(filename)
+
+Endtime = Sys.time()
+print(paste("End time: ", Endtime))
+Totaltime = round(Endtime - Starttime,2)
+print(paste("Totaltime for loading above file(s) = ", Totaltime))
+
+## Save a copy of the loaded data, in case we need it during manipulations below
+save_CB <- CB
+```
+
+```{r chunk10-glimpse, eval=F}
+#### `glimpse` the dataset
+glimpse(CB)
+```
+
+```{r chunk11-structure, eval=F}
+#### `str` - structure of the dataset
+str(CB)
+```
+
+```{r chunk12-summary, eval=F}
+#### Summary of the dataset
+summary(CB)
+```
+
+\newpage
+
+```{r chunk13-missing-values, eval=FALSE}
+### **Check for missing values**
+
+#### Let's check whether any variables have missing values, i.e., values which are NULL or NA.
+miss.cols = apply(CB, 2, function(x) any(is.na(x)))
+print(paste("Number of columns with missing values = ", length(names(miss.cols[miss.cols==TRUE]))))
+print(paste("Names of columns with missing values = ", paste(names(miss.cols[miss.cols==TRUE]), collapse = ', ')))
+
+print(paste("Number of rows missing birth_year: ", sum(is.na(CB$birth_year))))      
+```
+
+
+```{r chunk14-trip-duration, eval=F}
+#### Histogram of trip_duration, log(trip_duration)
+
+summary(CB$trip_duration)
+par(mfrow=c(2,1))
+hist(CB$trip_duration,col='lightgreen', breaks=100)
+hist(log(CB$trip_duration),col='lightblue', breaks=100)
+
+```
+
+It may be easier to think of trip duration in other units (i.e., minutes, hours, or days) rather than in seconds, so lets create such variables.
+Also, let's confirm that the value shown (in seconds) is consistent with the difference between the start time and the end time:
+
+```{r chunk15-trip-duration-units-before-truncation, eval=F}
+#### Summary of trip durations before censoring/truncation:
+#express trip duration in seconds, minutes, hours, days
+# note: we needed to fix the November daylight savings problem to eliminate negative trip times
+
+#### Supplied seconds
+supplied_secs<-summary(CB$trip_duration)
+
+#### Seconds
+CB$trip_duration_s = as.numeric(CB$e_time - CB$s_time,"secs")
+calc_secs<-summary(CB$trip_duration_s)
+
+#### Minutes
+CB$trip_duration_m = as.numeric(CB$e_time - CB$s_time,"mins")
+calc_mins<-summary(CB$trip_duration_m)
+
+#### Hours
+CB$trip_duration_h = as.numeric(CB$e_time - CB$s_time,"hours")
+calc_hours<-summary(CB$trip_duration_h)
+
+#### Days
+CB$trip_duration_d = as.numeric(CB$e_time - CB$s_time,"days")
+calc_days <-summary(CB$trip_duration_d)
+
+# library(kableExtra) # loaded above
+rbind(supplied_secs, calc_secs, calc_mins, calc_hours, calc_days) %>% 
+  kable(caption="Summary of original Trip duration data") %>% 
+  kable_styling(c("bordered","striped"),latex_options =  "hold_position")
+
+```
+
+
+```{r chunk16-drop-long-trips, eval=F}
+#### Let's assume that nobody would rent a bicycle for more than a specified timelimit, 
+#### and drop the records which exceed this:
+total_rows=dim(CB)[1]
+#print(paste("Initial number of trips: ", total_rows))
+
+# choose only trips that were at most 3 hrs, as longer trips may reflect an error
+# remove long trips from the data set -- something may be wrong (e.g., the system failed to properly record the return of a bike)
+longtripthreshold_s = 60 * 60 *3  # 10800 seconds = 180 minutes = 3 hours
+longtripthreshold_m = longtripthreshold_s / 60
+longtripthreshold_h = longtripthreshold_m / 60
+
+long_trips <- CB %>% filter(trip_duration_s > longtripthreshold_s)
+num_long_trips_removed = dim(long_trips)[1]
+pct_long_trips_removed = round(100*num_long_trips_removed / total_rows, 3)
+
+CB <- CB %>% filter(trip_duration <= longtripthreshold_s)
+reduced_rows = dim(CB)[1]
+
+print(paste0("Removed ", num_long_trips_removed, " trips (", pct_long_trips_removed, "%) of longer than ", longtripthreshold_h, " hours."))
+print(paste0("Remaining number of trips: ", reduced_rows))
+
+par(mfrow=c(2,1))
+hist(CB$trip_duration,col='lightgreen', breaks=100)
+hist(log(CB$trip_duration),col='lightblue', breaks=100)
+
+```
+
+```{r chunk17-birth-year,eval=F}
+### Examine birth year
+summary(CB$birth_year)
+hist(CB$birth_year, col="lightgreen")
+# Deduce age from trip date and birth year
+#library(lubridate) #loaded above
+CB$age <- year(CB$s_time) - CB$birth_year
+
+par(mfrow=c(1,2))
+hist(CB$age, col="lightblue",  xlab="User Age, inferred from birth year")
+hist(log(CB$age), col="lightblue",  xlab="log(User Age, inferred from birth year)")
+```
+
+```{r chunk18-age-and-birth-year, eval=F}
+
+#### Remove trips associated with very old users
+#### ALSO removes trips associated with NA ages  
+
+# choose only trips where the user was born after a certain year,  as older users may reflect an error
+age_threshhold = 90
+aged_trips <- CB %>% filter(age > age_threshhold)
+num_aged_trips_removed = dim(aged_trips)[1]
+pct_aged_trips_removed = round(100*num_aged_trips_removed / total_rows, 3)
+
+unknown_age_trips <- CB %>% filter(is.na(age))
+num_unknown_age_trips_removed = dim(unknown_age_trips)[1]
+pct_unknown_age_trips_removed = round(100*num_unknown_age_trips_removed / total_rows, 3)
+
+print(paste0("Removed ", num_aged_trips_removed, " trips (", pct_aged_trips_removed, "%) of users older than ", age_threshhold, " years."))
+
+print(paste0("Removed ", num_unknown_age_trips_removed, " trips (", pct_unknown_age_trips_removed, "%) of users where age is unknown (birth_year unspecified)."))
+
+CB <- CB %>% filter(age <= age_threshhold)
+reduced_rows = dim(CB)[1]
+print(paste0("Remaining number of trips: ", reduced_rows))
+
+par(mfrow=c(1,2))
+hist(CB$age, col="lightgreen",  xlab="User Age, inferred from birth year")
+hist(log(CB$age), col="lightgreen",  xlab="log(User Age, inferred from birth year)")
+```
+
+
+
+
+```{r chunk19-get-distance, eval=F}
+# Compute the distance between start and end stations
+s_lat_long <- CB %>% select(c(s_lat,s_long)) %>%  as.matrix
+e_lat_long <- CB %>% select(c(e_lat,e_long)) %>%  as.matrix
+#library(sp) # loaded above
+CB$distance_km <- spDists(s_lat_long, e_lat_long, longlat=T, diagonal = TRUE)
+summary(CB$distance_km)
+maxdistance = summary(CB$distance_km)["Max."]
+hist(CB$distance_km, breaks=30, col="orange")
+```
+
+
+
+
+```{r chunk20-delete-long-distances, eval=F}
+### long distances?
+long_distances <- CB %>% filter(distance_km>50)
+
+#### Delete unusually long distances
+
+if (dim(long_distances)[1]>0) {
+print(paste("Dropping ", dim(long_distances)[1], " trips because of unreasonably long distance travelled"))
+    print(t(long_distances))
+  
+### These items have a station where latitude and longitude are zero.
+### Drop them:
+
+  CB <- CB %>% filter(distance_km<50)
+
+  summary(CB$distance_km)
+  hist(CB$distance_km, breaks=30, col="lightgreen", main="Histogram of distance_km after dropping problem trips")
+} else {print("No unusually long distances found in this subset of the data.")}
+
+```
+
+
+```{r chunk21-get_trip-fee, eval=F}
+# There is a time-based usage fee for rides longer than an initial period.
+# For user_type=Subscriber, the fee is $2.50 per 15 minutes following an initial free 45 minutes.
+# For user_type=Customer, the fee is $4.00 per 15 minutes following an initial free 30 minutes.
+# There are some cases where the user type is not specified (we have relabeled as "UNKNOWN")
+
+CB$trip_fee <- 0
+CB$trip_fee[CB$user_type=="Subscriber"] <- 2.50 * (ceiling(
+  CB$trip_duration_m[CB$user_type=="Subscriber"]  / 15)-3)  # first 45 minutes are free
+CB$trip_fee[CB$user_type=="Customer"]   <- 4.00 * (ceiling(
+  CB$trip_duration_m[CB$user_type=="Customer"]  / 15)-2)  # first 30 minutes are free
+CB$trip_fee[CB$user_type=="UNKNOWN"] <- 0   # we don't know the fee structure for "UNKNOWN" so assume zero
+CB$trip_fee[CB$trip_fee<0] <- 0   # fee is non-negative
+
+#summary(CB$trip_fee)
+#print("Table of trip_fee:")
+table(CB$trip_fee,dnn="Fee Amount")  %>% 
+  kable(caption="Table of trip_fees:") %>% 
+  kable_styling(c("bordered","striped"), 
+                full_width = F,
+                latex_options =  "hold_position")
+
+hist(CB$trip_fee,breaks=40,col="yellow", main="Histogram of trip_fee (most trips incur no fee)")
+hist(CB$trip_fee[CB$trip_fee>0],breaks=32,col="lightgreen",main = "Histogram of trip_fee excluding zeros (leftmost bar = $2.50)")
+
+```
+
+```{r chunk22-trip-duration-units-after-censor-truncate, eval=F}
+#### Summary of trip durations AFTER censoring/truncation:
+
+#express trip duration in seconds, minutes, hours, days
+# note: we needed to fix the November daylight savings problem to eliminate negative trip times
+
+#### Supplied seconds
+#print("Supplied Seconds:")
+supplied_secs<-summary(CB$trip_duration)
+
+#### Seconds
+CB$trip_duration_s = as.numeric(CB$e_time - CB$s_time,"secs")
+calc_secs<-summary(CB$trip_duration_s)
+
+#### Minutes
+CB$trip_duration_m = as.numeric(CB$e_time - CB$s_time,"mins")
+calc_mins<-summary(CB$trip_duration_m)
+
+#### Hours
+CB$trip_duration_h = as.numeric(CB$e_time - CB$s_time,"hours")
+calc_hours<-summary(CB$trip_duration_h)
+
+#### Days
+CB$trip_duration_d = as.numeric(CB$e_time - CB$s_time,"days")
+calc_days <-summary(CB$trip_duration_d)
+
+# library(kableExtra) # loaded above
+rbind(supplied_secs, calc_secs, calc_mins, calc_hours, calc_days) %>% 
+  kable(caption = "Summary of trip durations - AFTER truncations:") %>%
+  kable_styling(c("bordered","striped"),latex_options =  "hold_position")
+```
+
+
+
+
+```{r chunk23-CBlite,eval=F}
+#### Make a smaller dataset, numeric, without multicollinearities, for correlation calculations
+# extract selected fields
+CBlite  <- select(CB, c(trip_duration, trip_fee, distance_km, 
+                        s_station_id, s_lat, s_long,
+                        e_station_id, e_lat, e_long,
+                        user_type, gender, age))
+
+#make numeric variables
+CBlite$user_type <- as.integer(CBlite$user_type)
+CBlite$gender <- as.integer(CBlite$gender)
+
+# function to revert factor back to its numeric levels
+as.numeric.factor <- function(x) {as.numeric(levels(x))[x]}
+
+CBlite$s_station_id <- as.numeric.factor(CBlite$s_station_id)
+CBlite$e_station_id <- as.numeric.factor(CBlite$e_station_id)
+```
+
+
+```{r chunk24-compute-correl,eval=F}
+#### compute correlations
+#library(Hmisc) #loaded above
+#library(corrplot) # loaded above
+res2<-rcorr(as.matrix(CBlite))
+respearson=rcorr(as.matrix(CBlite),type = "pearson")
+resspearman=rcorr(as.matrix(CBlite),type = "spearman")
+res3 <- cor(as.matrix(CBlite))
+```
+
+
+```{r chunk25-pearson-rank-correl, fig.width = 8, fig.height=8, eval=F}
+#### Pearson rank correlation
+  corrplot::corrplot(corr = respearson$r, type = "upper", outline = T, order="original", 
+           p.mat = respearson$P, sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nRank Correlation (Pearson)",
+           number.cex = 1.1, number.font = 2, number.digits = 2 )
+```
+
+
+```{r chunk26-spearman-rank-correl, fig.width = 8, fig.height=8, eval=F}
+#### Spearman rank correlation
+  corrplot::corrplot(corr = resspearman$r, type = "upper", outline = T,  order="hclust", 
+           p.mat = resspearman$P, sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nRank Correlation (Spearman)",
+           number.cex = 0.9, number.font = 1, number.digits = 2)
+```
+
+```{r chunk27-act-correlations, echo=FALSE, fig.width = 15, fig.height=15, eval=F}
+#### actual correlations (not rank correlations)
+  corrplot(corr = res3, type = "upper", outline = T,  order="hclust", 
+           sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nActual correlations (not rank correlations)",
+           number.cex = 1.4, number.font = 1, number.digits = 2 )
+```
+
+
+
+
+\newpage
+
+```{r chunk28-make-train-and-test-datasets, eval=F}
+#### Aggregate CitiBike data and join to daily weather data
+#### Make train and test dataframes
+
+summary(CB)
+
+##CB$user_type[is.na(CB$user_type)] <- "UNKNOWN"    ## should  not be necessary to do this
+CB$gender <- recode_factor(CB$gender, '1' = "Male", '2' = "Female", '0' = "UNKNOWN")
+
+# make the training data set
+train <- CB %>% 
+              mutate(start_date = as.Date(s_time, format="%Y-%m-%d"),
+#                     user_type = as.character(user_type),
+                     train = 1) %>%
+              filter(start_date < '2019-01-01') %>%
+              group_by(start_date, user_type, train, gender) %>%
+              summarise(
+                mean_duration = mean(trip_duration), 
+                median_duration = median(trip_duration),
+                sum_distance_km = sum(distance_km),
+                sum_trip_fee = sum(trip_fee),
+                avg_age = mean(age),
+                trips = n()
+              ) %>%
+              ungroup()
+
+train_rows = dim(train)[1]
+#summary(train)
+
+# make the test data set
+test <- CB %>% 
+              mutate(start_date = as.Date(s_time, format="%Y-%m-%d"),
+#                     user_type = as.character(user_type),
+                     train = 0) %>%
+              filter(start_date >= '2019-01-01') %>%
+              group_by(start_date, user_type, train, gender) %>%
+              summarise(
+                mean_duration = mean(trip_duration), 
+                median_duration = median(trip_duration),
+                sum_distance_km = sum(distance_km),
+                sum_trip_fee = sum(trip_fee),
+                avg_age = mean(age),
+                trips = n()
+              ) %>%
+              ungroup()
+test_rows = dim(test)[1]
+
+
+# Join train with weather data (there should be no rows with missing values)
+train_weather <- weather %>% inner_join(train, by = c("DATE" = "start_date" ))
+#dim(train_weather)
+
+# Join test with weather data (there should be no rows with missing values)
+test_weather <- weather %>% inner_join(test, by = c("DATE" = "start_date" )) 
+
+#dim(test_weather)
+```
+
+
+```{r chunk29-plot-weather-data, eval=F}
+library(ggplot2)
+# user_type boxplot
+ggplot(data = train_weather,
+       aes(x = user_type,
+           y = trips)) +
+  geom_boxplot()
+# trip_fee scatterplot
+ggplot(data = train_weather,
+       aes(x = sum_trip_fee,
+           y = trips)) +
+  geom_point()
+
+# weather TMAX over the year
+ggplot(data = train_weather,
+       aes(x = DATE,
+           y = TMAX)) +
+  geom_point()
+
+# weather TMAX and smooth over the year
+ggplot(data = train_weather,
+       aes(x = DATE,
+           y = TMAX,
+           color = year(DATE))) +
+  geom_smooth()
+
+# the number of trips with min. tempareture
+ggplot(data = train_weather,
+       aes(x = TMIN,
+           y = trips)) +
+  geom_smooth()
+# the number of trips with max. tempareture
+ggplot(data = train_weather,
+       aes(x = gender,
+           y = trips)) +
+  geom_boxplot()
+
+# the number of trips by date
+ggplot(data = train_weather,
+       aes(x = DATE,
+           y = trips)) +
+  geom_point()
+
+par(mfrow=c(2,2))
+plot(density(train_weather$trips), main = "trips")
+plot(density(train_weather$avg_age), main = "avg_age")
+plot(density(train_weather$mean_duration), main = "mean_duration")
+plot(density(train_weather$median_duration), main = "median_duration")
+plot(density(train_weather$AWND), main = "AWND - Average Daily Wind Speed")
+plot(density(train_weather$PRCP), main = "PRCP - Amount of Daily Precipitation")
+plot(density(train_weather$SNOW), main = "SNOW - Amount of Daily Snowfall")
+plot(density(train_weather$SNWD), main = "SNWD - Depth of Snow on the ground")
+plot(density(train_weather$TMAX), main = "TMAX - Maximum Daily Temperature")
+plot(density(train_weather$TMIN), main = "TMIN - Minimum Daily Temperature")
+
+```
+
+\newpage
+
+```{r chunk30-Boruta-variable-selection,  fig.width = 8, fig.height=10, eval=FALSE}
+# 5. Variable Selection
+# We use the "Boruta" package to select those variables which the Boruta algorithm deems "important."
+library(Boruta)
+# library(kableExtra) # loaded above
+set.seed(777)
+num_cols <- length(names(train_weather))
+
+#### suppressed because it is very time consuming to run each time.  
+#### The result is the list of "important" variables, which was copied and hard-coded
+#borutaOutput <- Boruta(trips ~ ., train_weather)
+print(borutaOutput)
+plot(borutaOutput,  cex.axis=0.75, las=2, main="Boruta algorithm for Feature Selection", xlab="")
+
+# Here is the Confirmed/Tentative/Rejected Borua decision:
+BorutaFinal       <- borutaOutput$finalDecision
+BorutaFinal
+
+# Here is the alphabetized list of Boruta decision:
+BorutaFinalAlpha  <- BorutaFinal[order(names(BorutaFinal))] %>% t %>% t
+BorutaFinalAlpha
+
+# Extract the numerical median results from the Boruta algorithm
+BorutaMedian      <- apply(X = borutaOutput$ImpHistory, MARGIN = 2, FUN = median)
+
+# drop the three "shadow" variables from the list (shadowMax,shadowMean,shadowMin)
+BorutaMedian      <- BorutaMedian[BorutaMedian %>% names %>% grep("shadow",.,invert=T)]
+
+# alphabetize the list
+BorutaMedianAlpha <- BorutaMedian[order(names(BorutaMedian))]
+BorutaMedianAlphaNum <- as.numeric(BorutaMedianAlpha)
+
+BorutaMedianAlpha <- BorutaMedian[order(names(BorutaMedian))] %>% t %>% t
+
+BorutaJoinedAlpha <- cbind(BorutaFinalAlpha,BorutaMedianAlpha)
+
+BorutaFinalAlphaResults <- as.character(BorutaFinalAlpha)
+BorutaFinalAlphaNames <- BorutaFinal[names(BorutaFinal) %>% order] %>% names()
+
+# Here's the alphabetical list of the Boruta results:
+BorutaByAlpha <- cbind(BorutaFinalAlphaNames,BorutaFinalAlphaResults,BorutaMedianAlphaNum)
+BorutaByAlpha %>% kable(caption="Alphabetical Boruta results") %>% 
+  kable_styling(c("bordered","striped"),
+                full_width = F,
+                latex_options =  "hold_position")
+
+# Here's the numerical list of the Boruta results (based upon median)
+BorutaByNum <- BorutaByAlpha[order(BorutaMedianAlphaNum),]
+BorutaByNum %>% kable(caption="Boruta results sorted by median value") %>% 
+  kable_styling(c("bordered","striped"),
+                full_width = F,
+                latex_options =  "hold_position")
+
+plot(borutaOutput)
+plot(borutaOutput, sort=FALSE)
+lz<-lapply(1:ncol(borutaOutput$ImpHistory),function(i) borutaOutput$ImpHistory[is.finite(borutaOutput$ImpHistory[,i]),i])
+names(lz) <- colnames(borutaOutput$ImpHistory)
+Labels <- sort(sapply(lz,median))
+
+plot(borutaOutput, xlab = "", xaxt = "n")
+axis(side = 1,las=2,labels = names(Labels), at = 1:ncol(borutaOutput$ImpHistory), cex.axis = 0.7)
+
+final.boruta <- TentativeRoughFix(borutaOutput)
+important <- getSelectedAttributes(final.boruta, withTentative = F)
+
+```
+
+```{r chunk31-boruta-selection-columns, eval=F}
+# load important variables
+### Because Boruta can take a very long time to run, saving the results here:
+
+important <-  c(
+"DATE"           ,
+"AWND"           ,
+"PRCP"           ,
+"SNOW"           ,
+"SNWD"           ,
+"TMAX"           ,
+"TMIN"           ,
+"WDF2"           ,
+"WDF5"           ,
+"WSF2"           ,
+"WSF5"           ,
+"WT01"           ,
+"WT02"           ,
+"user_type"      ,
+"gender"         ,
+"mean_duration"  ,
+"median_duration",
+##"sum_distance_km",  ## This has 0.97 correlation with number of trips -- not fair to use for prediction
+"sum_trip_fee"   ,
+"avg_age"       
+)     
+
+impF <- important
+train.df <- train_weather %>% select(c("trips", impF))
+# we will include "trips" for now but remove it below
+test.df <- test_weather %>% select(c("trips", impF))
+
+### glm model
+summary(train.df)
+
+```
+
+
+
+
+
+
+
+
+```{r chunk24x-compute-correl,eval=F}
+
+### Make numeric version of training dataset
+train.df.numerics <- train.df %>% select(-c(user_type,gender)) %>% mutate(DATE=as.numeric(DATE))
+
+
+#### Correlation on daily aggregated datasets
+
+
+#### compute correlations
+#library(Hmisc) #loaded above
+#library(corrplot) # loaded above
+res2x<-rcorr(as.matrix(train.df.numerics))
+respearsonx=rcorr(as.matrix(train.df.numerics),type = "pearson")
+resspearmanx=rcorr(as.matrix(train.df.numerics),type = "spearman")
+res3x <- cor(as.matrix(train.df.numerics))
+```
+
+
+```{r chunk25x-pearson-rank-correl, fig.width =10, fig.height=10, eval=F}
+#### Pearson rank correlation
+  corrplot::corrplot(corr = respearsonx$r, type = "upper", outline = T, order="original", 
+           p.mat = respearsonx$P, sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nRank Correlation (Pearson)",
+           number.cex = 0.9, number.font = 2, number.digits = 2 )
+```
+
+
+```{r chunk26x-spearman-rank-correl, fig.width = 12, fig.height=12, eval=F}
+#### Spearman rank correlation of daily aggregated data
+  corrplot::corrplot(corr = resspearmanx$r, type = "upper", outline = T,  order="hclust", 
+           p.mat = resspearmanx$P, sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nRank Correlation (Spearman)",
+           number.cex = 0.9, number.font = 1, number.digits = 2)
+```
+
+```{r chunk27x-act-correlations, echo=FALSE, fig.width = 12, fig.height=12, eval=F}
+#### actual correlations (not rank correlations)
+  corrplot(corr = res3x, type = "upper", outline = T,  order="hclust", 
+           sig.level = 0.05, insig = "blank", addCoef.col = "black",
+           title = "\nActual correlations (not rank correlations)",
+           number.cex = 1, number.font = 1, number.digits = 2 )
+```
+
+
+
+
+
+
+
+\newpage
+
+```{r chunk32-target-trips, eval=F}
+##### set up test variable trips
+###### only run this once...
+if (!exists("test.values")) {
+  # pull the TARGET variable out from the test dataframe, and save it for RMSE calculations
+  test.values <- test.df$trips
+  # delete the value from the test dataframe
+  test.df$trips <- NULL
+} 
+```
+
+
+```{r chunk33-linear-models, eval=F}
+#### Standard linear models
+# use Sachid's RMSE function
+model.fit.evaluate.rmse <- function(model, test.data, test.values) {
+output = predict(model, test.data)
+rmse = round(sqrt(
+        sum((output - test.values)^2)
+        /
+          length(test.values)
+        )
+        , digits =2)
+return(rmse)
+}
+
+### evaluation where predicted variable in the model is log(y) ~ dependent variables
+model.fit.evaluate.rmse.log <- function(model, test.data, test.values) {
+output = exp(predict(model, test.data))
+rmse = round(sqrt(sum((output - test.values)^2)/length(test.values)), digits =2)
+return(rmse)
+}
+
+
+
+
+
+# linear model 1 without DATE variable
+lm.1 <- lm(trips ~  gender+user_type+avg_age+AWND+PRCP+SNOW+SNWD
+                    +TMAX+TMIN+WDF2+WDF5+WSF2+WSF5+WT01+WT02, 
+                    data=train.df)
+
+#lm.1 <- lm(trips ~ gender+user_type+avg_age+TMAX+TMIN+AWND+WSF5+WSF2+WDF5, 
+#           data = train.df)
+summary(lm.1)
+(rmse.nb1 = model.fit.evaluate.rmse(lm.1, test.df, test.values))
+output1=predict(lm.1,test.df)
+summary(output1)
+summary(test.values)
+plot(output1~test.values)
+abline(h=0,col="red")
+abline(v=0,col="red")
+# Compute RMSE
+print(paste("lm.1 RMSE:", rmse.nb1))
+plot(lm.1)
+
+
+
+
+# LOG linear model 1 without DATE variable
+lm.1a <- lm(log(trips) ~  gender+user_type+avg_age+AWND+PRCP+SNOW+SNWD
+                    +TMAX+TMIN+WDF2+WDF5+WSF2+WSF5+WT01+WT02, 
+                    data=train.df)
+summary(lm.1a)
+(rmse.nb1a = model.fit.evaluate.rmse.log(lm.1a, test.df, test.values))
+output1a=predict(lm.1a,test.df)
+expoutput1a = exp(output1a)
+summary(expoutput1a)
+summary(test.values)
+plot(expoutput1a~test.values)
+abline(h=0,col="red")
+abline(v=0,col="red")
+# Compute RMSE
+print(paste("lm.1a RMSE:", rmse.nb1a))
+plot(lm.1a)
+
+###
+
+# linear model 1 with DATE variable
+lm.2 <- lm(trips ~  DATE+gender+user_type+avg_age+AWND+PRCP+SNOW+SNWD
+                    +TMAX+TMIN+WDF2+WDF5+WSF2+WSF5+WT01+WT02, 
+                    data=train.df)
+summary(lm.2)
+(rmse.nb2 = model.fit.evaluate.rmse(lm.2, test.df, test.values))
+output2=predict(lm.2,test.df)
+summary(output2)
+summary(test.values)
+plot(output2~test.values)
+abline(h=0,col="red")
+abline(v=0,col="red")
+# Compute RMSE
+print(paste("lm.2 RMSE:", rmse.nb2))
+plot(lm.2)
+
+
+# LOG linear model 2
+lm.2a <- lm(log(trips) ~  DATE+gender+user_type+avg_age+AWND+PRCP+SNOW+SNWD
+                    +TMAX+TMIN+WDF2+WDF5+WSF2+WSF5+WT01+WT02, 
+                    data=train.df)
+summary(lm.2a)
+(rmse.nb2a = model.fit.evaluate.rmse.log(lm.2a, test.df, test.values))
+output2a=predict(lm.2a,test.df)
+expoutput2a = exp(output2a)
+summary(expoutput2a)
+summary(test.values)
+plot(expoutput2a~test.values)
+abline(h=0,col="red")
+abline(v=0,col="red")
+# Compute RMSE
+print(paste("lm.2a RMSE:", rmse.nb2a))
+plot(lm.2a)
+
+###
+
+# linear model 3:
+# linear model 1 with DATE variable and remove insignificant variables
+lm.3 <- lm(trips ~  DATE+gender+user_type+avg_age+    PRCP+    SNWD
+                    +TMAX+    WT01, 
+                    data=train.df)
+summary(lm.3)
+(rmse.nb3 = model.fit.evaluate.rmse(lm.3, test.df, test.values))
+output3=predict(lm.3,test.df)
+summary(output3)
+summary(test.values)
+plot(output3~test.values)
+abline(h=0,col="red")
+abline(v=0,col="red")
+# Compute RMSE
+print(paste("lm.3 RMSE:", rmse.nb3))
+plot(lm.3)
+
+
+# LOG linear model 3a
+lm.3a <- lm(log(trips) ~  DATE+gender+user_type+avg_age+    PRCP+SNOW+SNWD
+                    +TMAX+    WT01, 
+                    data=train.df)
+summary(lm.3a)
+(rmse.nb3a = model.fit.evaluate.rmse.log(lm.3a, test.df, test.values))
+output3a=predict(lm.3a,test.df)
+expoutput3a = exp(output3a)
+summary(expoutput3a)
+summary(test.values)
+plot(expoutput3a~test.values)
+abline(h=0,col="red")
+abline(v=0,col="red")
+# Compute RMSE
+print(paste("lm.3a RMSE:", rmse.nb3a))
+plot(lm.3a)
+
+
+```
+
+
+
+\newpage
+
+```{r chunk34-glm, eval=F}
+## Generalized linear models
+
+# glm model 1
+
+glm.poisson.1 <- glm(trips ~ ., data = train.df, family = poisson())
+summary(glm.poisson.1)
+(rmse.poisson.1 = model.fit.evaluate.rmse(glm.poisson.1, test.df, test.values) )
+print(paste("glm.poisson.1 RMSE: ", rmse.poisson.1))
+
+output11=predict(glm.poisson.1,test.df)
+summary(output11)
+summary(test.values)
+plot(output11~test.values, main="glm.poisson.1")
+abline(h=0,col="red")
+abline(v=0,col="red")
+
+plot(glm.poisson.1)
+
+
+# glm model 2
+# Keep just the significant variables from above
+#glm.poisson.2 <- glm(trips ~ DATE+gender+user_type+avg_age+TMAX+WSF5, data = train.df, family = poisson())
+glm.poisson.2 <- glm(trips ~ DATE+PRCP+SNOW+SNWD+TMAX+WT01
+                     +user_type+gender+ avg_age,
+                     data = train.df, family = poisson())
+summary(glm.poisson.2)
+(rmse.poisson.2 = model.fit.evaluate.rmse(glm.poisson.2, test.df, test.values) )
+print(paste("glm.poisson.2 RMSE: ", rmse.poisson.2))
+
+output12=predict(glm.poisson.2,test.df)
+summary(output12)
+summary(test.values)
+plot(output12~test.values, main="glm.poisson.2")
+abline(h=0,col="red")
+abline(v=0,col="red")
+
+plot(glm.poisson.2)
+
+
+
+
+
+
+# glm model 3
+glm.gaussian.3 <- glm(trips ~ ., data = train.df, family = gaussian)
+summary(glm.gaussian.3)
+(rmse.gaussian.3 = model.fit.evaluate.rmse(glm.gaussian.3, test.df, test.values) )
+print(paste("glm.gaussian.3 RMSE: ", rmse.gaussian.3))
+
+output13=predict(glm.gaussian.3,test.df)
+summary(output13)
+summary(test.values)
+plot(output13~test.values, main="glm.gaussian.3")
+abline(h=0,col="red")
+abline(v=0,col="red")
+
+plot(glm.gaussian.3)
+
+
+
+
+
+
+# glm model 4
+#glm.gaussian.4 <- glm(trips ~ DATE+gender+user_type+avg_age+TMAX+WSF5, data = train.df, family = gaussian)
+glm.gaussian.4 <- glm(trips ~ DATE+PRCP+SNWD+user_type+gender+avg_age+sum_distance_km, 
+                      data = train.df, family = gaussian)
+summary(glm.gaussian.4)
+(rmse.gaussian.4 = model.fit.evaluate.rmse(glm.gaussian.4, test.df, test.values) )
+print(paste("glm.gaussian.4 RMSE: ", rmse.gaussian.4))
+
+output14=predict(glm.gaussian.4,test.df)
+summary(output14)
+summary(test.values)
+plot(output14~test.values, main="glm.gaussian.4")
+abline(h=0,col="red")
+abline(v=0,col="red")
+
+plot(glm.gaussian.4)
+
+
+
+```
+
