@@ -47,8 +47,8 @@ library(kableExtra)
 ```{r load-training-data, echo=FALSE}
 # Set working directory and load the training data
 #setwd("D:/MSDS/Data621_Group4/HW-3/Data/")
-#setwd("~/cuny/2019Fall/Data621_Group4/HW-3")
-mydir = "C:/Users/Michael/Dropbox/priv/CUNY/MSDS/201909-Fall/DATA621_Nasrin/20191030_HW3_Crime/HW-3"
+setwd("~/cuny/2019Fall/Data621_Group4/HW-3")
+#mydir = "C:/Users/Michael/Dropbox/priv/CUNY/MSDS/201909-Fall/DATA621_Nasrin/20191030_HW3_Crime/HW-3"
 setwd(mydir)
 train.df = read.csv("./Data/crime-training-data_modified.csv")
 ```
